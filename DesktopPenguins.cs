@@ -9,7 +9,7 @@
 //
 // Build (no extra installs needed on Windows):
 //   C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:DesktopPenguins.exe DesktopPenguins.cs
-// Run:  DesktopPenguins.exe [numberOfPenguins]     (default 5)
+// Run:  DesktopPenguins.exe [numberOfPenguins]     (default and minimum 6: the core six)
 //       DesktopPenguins.exe --preview sheet.png    (save all frames to an image)
 
 using System;
@@ -85,9 +85,10 @@ namespace DesktopPenguins
 
     static class Art
     {
-        public const int W = 44, H = 52;             // sprite window size in pixels (room for umbrella / Zs)
-        public const int HeadH = 28;                  // feet-to-top-of-head height in pixels (for stacking)
-        const float K = 0.24f;                        // pixels per design unit
+        public const float Scale = 1.2f;              // overall penguin size (1 = the original small ones)
+        public const int W = 53, H = 63;             // sprite window size in pixels (room for umbrella / Zs)
+        public const int HeadH = 34;                  // feet-to-top-of-head height in pixels (for stacking)
+        const float K = 0.24f * Scale;                // pixels per design unit
         const float DW = W / K, DH = H / K;           // canvas in design units
         const float PX = (DW - 150f) / 2f, PY = DH - 125f; // where the 150x125 penguin box sits (bottom centre)
         const int SS = 4;                             // supersampling factor
@@ -97,15 +98,21 @@ namespace DesktopPenguins
                          ClimbA = 15, ClimbB = 16, BuildA = 17, BuildB = 18, PullA = 19, PullB = 20,
                          YawnA = 21, YawnB = 22, SwayL = 23, SwayR = 24, TypeA = 25, TypeB = 26,
                          ShakeL = 27, ShakeR = 28, DiveA = 29, DiveB = 30, PlantA = 31, PlantB = 32,
-                         DazedA = 33, DazedB = 34;
-        public const int Frames = 35;
+                         DazedA = 33, DazedB = 34, PetA = 35, PetB = 36;
+        public const int Frames = 37;
+
+        // Accessories (one sprite set each): 0 = none.
+        public const int NoOutfit = 0, Nightcap = 1, Scarf = 2, HardHat = 3, Goggles = 4, Headphones = 5, Propeller = 6, Outfits = 7;
+        public const float SmallScale = 0.8f;         // Pip, the little brother, is drawn at this size
+        static int outfit;     // the accessory being drawn by the current Render call
 
         // Sleep frames contain "z" letters, which shouldn't be mirrored.
         public static bool Mirrorable(int f) { return f != SleepA && f != SleepB; }
 
         // Rendered facing right; mirror for left.
-        public static Bitmap Render(int frame)
+        public static Bitmap Render(int frame, int accessory = NoOutfit)
         {
+            outfit = accessory;
             using (var big = new Bitmap(W * SS, H * SS, PixelFormat.Format32bppPArgb))
             {
                 using (var g = Graphics.FromImage(big))
@@ -113,6 +120,12 @@ namespace DesktopPenguins
                     g.Clear(Color.Transparent);
                     g.SmoothingMode = SmoothingMode.AntiAlias;
                     g.ScaleTransform(SS * K, SS * K);
+                    if (accessory == Propeller)
+                    {   // the little brother: same drawing, shrunk about the feet
+                        g.TranslateTransform(DW / 2, DH - 2);
+                        g.ScaleTransform(SmallScale, SmallScale);
+                        g.TranslateTransform(-DW / 2, -(DH - 2));
+                    }
                     switch (frame)
                     {
                         case WalkA:   At(g); Penguin(g, 8, 20, -4, -5, 3, 0, false); break;
@@ -154,6 +167,9 @@ namespace DesktopPenguins
                         // dazed: wobbling, with stars circling the head
                         case DazedA:  AtFeet(g, -5); PenguinF(g, 18, 10, 0, 0, 0, 0, 0); Stars(g, 0); break;
                         case DazedB:  AtFeet(g, 5);  PenguinF(g, 10, 18, 0, 0, 0, 0, 0); Stars(g, 60); break;
+                        // being petted: eyes shut, nuzzling forward into the cursor
+                        case PetA:    AtFeet(g, 7);  PenguinF(g, 28, 40, 0, 0, 0, 0, 3); break;
+                        case PetB:    AtFeet(g, 12); PenguinF(g, 34, 52, 0, 0, 0, 0, 3); break;
                         default:      AtFeet(g, 14);  PenguinF(g, 150, 150, -4, -3, 4, -3, 0); break; // SwayR
                     }
                 }
@@ -194,7 +210,7 @@ namespace DesktopPenguins
 
         // Cartoon penguin in a 150x125 box, facing right.
         // armL/armR: flipper angle outward from hanging down, in degrees.  fl*/fr*: foot offsets.
-        // face: 0 eyes open, 1 asleep, 2 yawning (eyes shut, beak wide open)
+        // face: 0 eyes open, 1 asleep, 2 yawning (eyes shut, beak wide open), 3 content (happy shut eyes, blush)
         // headTurn: 0 = normal 3/4 view; otherwise the body faces front and only the face
         //           turns (-1 left .. 1 right) with a frown, for shaking the head "no".
         static void PenguinF(Graphics g, float armL, float armR, float flx, float fly, float frx, float fry, int face,
@@ -235,7 +251,23 @@ namespace DesktopPenguins
                     g.TranslateTransform(-cx, -30);
                 }
 
-                if (asleep)
+                if (outfit == Scarf) NeckWear(g, cx, fd);
+
+                if (face == 3)
+                {   // content: upturned "^ ^" eyes and rosy cheeks
+                    using (var lid = new Pen(Color.FromArgb(235, 235, 240), 2.6f))
+                    {
+                        lid.StartCap = lid.EndCap = LineCap.Round;
+                        g.DrawArc(lid, cx - 15 + fd, 21, 13, 10, 200, 140);
+                        g.DrawArc(lid, cx + 2 + fd, 21, 13, 10, 200, 140);
+                    }
+                    using (var blush = new SolidBrush(Color.FromArgb(150, 255, 120, 150)))
+                    {
+                        g.FillEllipse(blush, cx - 21 + fd, 31, 9, 5);
+                        g.FillEllipse(blush, cx + 14 + fd, 31, 9, 5);
+                    }
+                }
+                else if (asleep)
                 {
                     using (var lid = new Pen(Color.FromArgb(235, 235, 240), 2.6f))
                     {
@@ -288,6 +320,99 @@ namespace DesktopPenguins
                     }
                 }
                 if (faceState != null) g.Restore(faceState);
+                if (outfit != NoOutfit && outfit != Scarf) HeadWear(g, cx, fd);
+            }
+        }
+
+        // Red knitted scarf with a tail hanging down the back, drawn under the beak.
+        static void NeckWear(Graphics g, float cx, float fd)
+        {
+            var wrap = new RectangleF(cx - 27, 47, 54, 11);
+            using (var b = new LinearGradientBrush(wrap, Color.FromArgb(232, 60, 60), Color.FromArgb(170, 25, 35), 90f))
+            {
+                var tail = new[] { new PointF(cx - 22, 52), new PointF(cx - 12, 52), new PointF(cx - 15, 80), new PointF(cx - 27, 78) };
+                g.FillPolygon(b, tail);
+                g.FillEllipse(b, wrap);
+            }
+            using (var stripe = new Pen(Color.FromArgb(250, 235, 225), 2.2f))
+            {
+                g.DrawLine(stripe, cx - 25, 71, cx - 14, 72);
+                g.DrawLine(stripe, cx - 24, 65, cx - 13, 66);
+            }
+            using (var edge = new Pen(Color.FromArgb(120, 15, 25), 1.4f)) g.DrawEllipse(edge, wrap);
+        }
+
+        // Nightcap, hard hat, swim goggles or headphones, drawn over the head.
+        static void HeadWear(Graphics g, float cx, float fd)
+        {
+            if (outfit == Propeller)
+            {   // rainbow propeller beanie
+                var dome = new RectangleF(cx - 26, -6, 52, 40);
+                Color[] seg = { Color.FromArgb(235, 60, 60), Color.FromArgb(255, 205, 40), Color.FromArgb(60, 170, 90), Color.FromArgb(60, 130, 235) };
+                for (int i = 0; i < 4; i++)
+                    using (var b = new SolidBrush(seg[i])) g.FillPie(b, dome.X, dome.Y, dome.Width, dome.Height, 180 + i * 45, 45);
+                using (var edge = new Pen(Color.FromArgb(40, 40, 60), 1.6f)) g.DrawArc(edge, dome, 180, 180);
+                using (var band = new SolidBrush(Color.FromArgb(40, 50, 110))) g.FillRectangle(band, cx - 26, 11, 52, 4);
+                using (var stem = new Pen(Color.FromArgb(60, 60, 70), 2.4f)) g.DrawLine(stem, cx, -6, cx, -15);
+                using (var red = new SolidBrush(Color.FromArgb(235, 60, 60)))
+                using (var blue = new SolidBrush(Color.FromArgb(60, 130, 235)))
+                using (var edge = new Pen(Color.FromArgb(40, 40, 60), 1.2f))
+                {
+                    g.FillEllipse(red, cx - 19, -20, 17, 7); g.DrawEllipse(edge, cx - 19, -20, 17, 7);
+                    g.FillEllipse(blue, cx + 2, -20, 17, 7); g.DrawEllipse(edge, cx + 2, -20, 17, 7);
+                }
+                using (var hub = new SolidBrush(Color.FromArgb(255, 205, 40))) g.FillEllipse(hub, cx - 3.5f, -20, 7, 7);
+            }
+            else if (outfit == HardHat)
+            {   // bright yellow safety helmet with a ridge and a brim: for the clumsy one
+                var dome = new RectangleF(cx - 27, -10, 54, 44);
+                using (var b = new LinearGradientBrush(dome, Color.FromArgb(255, 236, 90), Color.FromArgb(235, 170, 0), 90f))
+                    g.FillPie(b, dome.X, dome.Y, dome.Width, dome.Height, 180, 180);
+                using (var edge = new Pen(Color.FromArgb(150, 95, 0), 2f))
+                {
+                    g.DrawArc(edge, dome, 180, 180);
+                    using (var ridge = new SolidBrush(Color.FromArgb(255, 250, 190)))
+                        g.FillRectangle(ridge, cx - 3 + fd * 0.5f, -9, 6, 20);
+                    var brim = new RectangleF(cx - 33 + fd * 0.6f, 9, 66, 9);
+                    using (var bb = new SolidBrush(Color.FromArgb(245, 190, 20))) g.FillEllipse(bb, brim);
+                    g.DrawEllipse(edge, brim);
+                }
+            }
+            else if (outfit == Nightcap)
+            {   // floppy blue nightcap drooping backwards, with a pom-pom
+                var cone = new[] { new PointF(cx - 24, 13), new PointF(cx + 23, 11), new PointF(cx + 4, -14), new PointF(cx - 22, -22), new PointF(cx - 40, -6) };
+                using (var b = new LinearGradientBrush(new RectangleF(cx - 42, -24, 66, 38), Color.FromArgb(110, 150, 240), Color.FromArgb(45, 70, 170), 90f))
+                    g.FillPolygon(b, cone);
+                using (var edge = new Pen(Color.FromArgb(30, 45, 110), 1.6f)) g.DrawPolygon(edge, cone);
+                using (var band = new SolidBrush(Color.FromArgb(245, 245, 250)))
+                {
+                    g.FillEllipse(band, cx - 27, 6, 54, 12);
+                    g.FillEllipse(band, cx - 48, -12, 13, 13);     // pom-pom
+                }
+            }
+            else if (outfit == Goggles)
+            {   // swim goggles pushed up on the forehead
+                using (var strap = new Pen(Color.FromArgb(40, 150, 160), 3.2f)) g.DrawLine(strap, cx - 25, 11, cx + 24, 8);
+                using (var lens = new SolidBrush(Color.FromArgb(200, 140, 225, 255)))
+                using (var rim = new Pen(Color.FromArgb(20, 120, 140), 2.4f))
+                {
+                    g.FillEllipse(lens, cx - 14 + fd, 3, 13, 10); g.DrawEllipse(rim, cx - 14 + fd, 3, 13, 10);
+                    g.FillEllipse(lens, cx + 2 + fd, 2, 13, 10);  g.DrawEllipse(rim, cx + 2 + fd, 2, 13, 10);
+                }
+                using (var shine = new SolidBrush(Color.FromArgb(230, 255, 255, 255)))
+                {
+                    g.FillEllipse(shine, cx - 11 + fd, 5, 4, 3);
+                    g.FillEllipse(shine, cx + 5 + fd, 4, 4, 3);
+                }
+            }
+            else
+            {   // headphones: band over the top, ear cup on the back of the head
+                using (var band = new Pen(Color.FromArgb(60, 60, 70), 4f))
+                    g.DrawArc(band, cx - 27, 1, 52, 44, 190, 160);
+                var cup = new RectangleF(cx - 31, 18, 15, 21);
+                using (var b = new LinearGradientBrush(cup, Color.FromArgb(255, 110, 180), Color.FromArgb(200, 40, 120), 0f))
+                    g.FillEllipse(b, cup);
+                using (var edge = new Pen(Color.FromArgb(60, 60, 70), 2f)) g.DrawEllipse(edge, cup);
             }
         }
 
@@ -391,12 +516,12 @@ namespace DesktopPenguins
         }
 
         // [0] facing right, [1] facing left
-        public static Bitmap[,] RenderAll()
+        public static Bitmap[,] RenderAll(int accessory = NoOutfit)
         {
             var all = new Bitmap[2, Frames];
             for (int f = 0; f < Frames; f++)
             {
-                all[0, f] = Render(f);
+                all[0, f] = Render(f, accessory);
                 all[1, f] = (Bitmap)all[0, f].Clone();
                 if (Mirrorable(f)) all[1, f].RotateFlip(RotateFlipType.RotateNoneFlipX);
             }
@@ -407,7 +532,7 @@ namespace DesktopPenguins
     // Snowman (stages 0-4 = being built, 5-7 = melting) and the tug-of-war rope.
     static class SnowArt
     {
-        public const int W = 40, H = 50, Stages = 8;
+        public const int W = 48, H = 60, Stages = 8;   // 40x50 drawing, scaled up with the penguins
         const int SS = 4;
 
         public static Bitmap Render(int stage)
@@ -418,7 +543,7 @@ namespace DesktopPenguins
                 {
                     g.Clear(Color.Transparent);
                     g.SmoothingMode = SmoothingMode.AntiAlias;
-                    g.ScaleTransform(SS, SS);
+                    g.ScaleTransform(SS * Art.Scale, SS * Art.Scale);
                     switch (stage)
                     {
                         case 0: Ball(g, 20, 44, 6); break;
@@ -441,6 +566,26 @@ namespace DesktopPenguins
                     }
                 }
                 return Downsample(big, W, H);
+            }
+        }
+
+        public const int BallSize = 12;
+
+        // A snowball for the snowball fight.
+        public static Bitmap RenderBall()
+        {
+            using (var big = new Bitmap(BallSize * SS, BallSize * SS, PixelFormat.Format32bppPArgb))
+            {
+                using (var g = Graphics.FromImage(big))
+                {
+                    g.Clear(Color.Transparent);
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.ScaleTransform(SS, SS);
+                    var r = new RectangleF(1, 1, BallSize - 2, BallSize - 2);
+                    using (var b = new LinearGradientBrush(r, Color.White, Color.FromArgb(185, 205, 230), 60f)) g.FillEllipse(b, r);
+                    using (var edge = new Pen(Color.FromArgb(120, 140, 170), 0.8f)) g.DrawEllipse(edge, r);
+                }
+                return Downsample(big, BallSize, BallSize);
             }
         }
 
@@ -628,9 +773,11 @@ namespace DesktopPenguins
             }
         }
 
-        // A dark rounded tag with the penguin's name in white.
-        public static Bitmap RenderTag(string name)
+        // A dark rounded tag with the penguin's name in white; the leader's is gold, with a star.
+        public static Bitmap RenderTag(string name, bool leader = false)
         {
+            if (leader) name = "★ " + name;
+            var ink = leader ? Color.FromArgb(255, 214, 70) : Color.White;
             using (var f = new Font("Segoe UI", 12f, FontStyle.Bold, GraphicsUnit.Pixel))
             {
                 SizeF sz;
@@ -644,13 +791,13 @@ namespace DesktopPenguins
                     g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
                     using (var path = RoundRect(new RectangleF(0.5f, 0.5f, w - 1, h - 1), 8))
                     using (var bg = new SolidBrush(Color.FromArgb(225, 28, 32, 44)))
-                    using (var edge = new Pen(Color.FromArgb(200, 255, 255, 255), 1f))
+                    using (var edge = new Pen(leader ? Color.FromArgb(230, 255, 200, 60) : Color.FromArgb(200, 255, 255, 255), leader ? 1.5f : 1f))
                     {
                         g.FillPath(bg, path);
                         g.DrawPath(edge, path);
                     }
                     using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-                        g.DrawString(name, f, Brushes.White, new RectangleF(0, 0, w, h + 1), sf);
+                        using (var inkB = new SolidBrush(ink)) g.DrawString(name, f, inkB, new RectangleF(0, 0, w, h + 1), sf);
                 }
                 return b;
             }
@@ -735,8 +882,65 @@ namespace DesktopPenguins
 
     // ---------------------------------------------------------------- state
 
+    // How a penguin tends to behave. The core five each have their own; everyone else is Ordinary.
+    class Personality
+    {
+        public string Trait;
+        // chance weights for: look, wave, sleep, slide, dance, hop, fly
+        public int[] Weights = { 20, 15, 12, 18, 12, 16, 7 };
+        public float SpeedMin = 1.2f, SpeedRange = 1.0f;
+        public int Restless = 240;          // 1-in-N chance per walking tick to start something
+        public float SlideMin = 5f;         // belly-slide launch speed
+        public int ClimbPct = 65;           // chance to climb a window it walks into
+        public int TripOdds;                // 1-in-N chance per walking tick to trip over (0 = never)
+        public int CuriousTicks = 16;       // how long the cursor must linger before it stops to look
+        public int GreetRange = 31;         // how close another penguin must be to say hi
+        public int PetHearts = 60;          // ticks between hearts while petted
+        public int PetLimit;                // after this long being petted: PetEnd (0 = enjoys it forever)
+        public int PetEnd = -1;
+        public int Accessory = Art.NoOutfit;
+        public bool Leader;                 // leads parades, snowmen and tug of war
+        public bool Small;                  // drawn smaller (shorter head for stacking)
+        public bool TagAlong;               // follows the big ones around and copies them
+
+        public static readonly Personality Ordinary = new Personality { Trait = "ordinary" };
+
+        public static Personality For(string name)
+        {
+            switch (name)
+            {
+                case "Pebble": return new Personality {   // sleepy: naps a lot, ambles, dozes off when petted
+                    Trait = "sleepy", Weights = new[] { 20, 8, 42, 6, 4, 10, 2 }, SpeedMin = 0.8f, SpeedRange = 0.5f,
+                    Restless = 300, ClimbPct = 35, PetLimit = 220, PetEnd = PenguinApp.SLEEP, Accessory = Art.Nightcap };
+                case "Waddles": return new Personality {  // friendly: waves at everyone, notices you fast, loves pets
+                    Trait = "friendly", Weights = new[] { 20, 38, 8, 10, 12, 10, 2 }, SpeedMin = 1.0f, SpeedRange = 0.6f,
+                    CuriousTicks = 6, GreetRange = 70, PetHearts = 35, Accessory = Art.Scarf };
+                case "Wobble": return new Personality {   // clumsy: trips over nothing, fumbles climbs (hence the hard hat)
+                    Trait = "clumsy", Weights = new[] { 28, 14, 10, 18, 14, 14, 2 }, SpeedMin = 1.0f, SpeedRange = 0.8f,
+                    ClimbPct = 30, TripOdds = 900, Accessory = Art.HardHat };
+                case "Puddle": return new Personality {   // slider: belly-slides everywhere, fast
+                    Trait = "slippery", Weights = new[] { 12, 10, 8, 52, 6, 10, 2 }, SlideMin = 7f,
+                    Restless = 170, Accessory = Art.Goggles };
+                case "Pip": return new Personality {      // the little brother: small, quick little steps, tags along and copies the big ones
+                    Trait = "little brother", Weights = new[] { 18, 22, 8, 14, 14, 22, 2 }, SpeedMin = 1.6f, SpeedRange = 0.6f,
+                    CuriousTicks = 8, GreetRange = 48, PetHearts = 40, TripOdds = 2500, ClimbPct = 50,
+                    Small = true, TagAlong = true, Accessory = Art.Propeller };
+                case "Ziggy": return new Personality {    // the leader, and hyper: dances, hops, flies, hurries; too busy for long pets
+                    Trait = "leader", Leader = true, Weights = new[] { 8, 10, 2, 12, 32, 26, 10 }, SpeedMin = 2.0f, SpeedRange = 0.9f,
+                    Restless = 130, ClimbPct = 90, PetLimit = 110, PetEnd = PenguinApp.DANCE, Accessory = Art.Headphones };
+            }
+            return Ordinary;
+        }
+    }
+
     class Penguin
     {
+        public Personality Me = Personality.Ordinary;
+        public int PetTicks;                  // how long the cursor has rested on this penguin
+        public int ThrowCool, ThrowAnim, HitTimer;   // snowball fight
+        public float HopFromX, HopFromY;      // tower: where the hop up started
+        public Penguin HopOnto;               // tower: whose head it is hopping onto
+        public float SummonY;                 // called to an activity: the floor it flies down to
         public float X, Y, Vx, Vy, Speed;   // X = centre, Y = feet (screen coords)
         public int Dir = 1;                 // 1 right, -1 left
         public int State;
@@ -789,6 +993,46 @@ namespace DesktopPenguins
         public List<Penguin> All() { var a = new List<Penguin>(Left); a.AddRange(Right); return a; }
     }
 
+    class Snowball
+    {
+        public float X, Y, Vx, Vy;
+        public bool FromLeft;
+        public SpriteWindow Win;
+    }
+
+    // Two teams lobbing snowballs at each other; the team with more hits wins.
+    class Fight
+    {
+        public List<Penguin> Left = new List<Penguin>(), Right = new List<Penguin>();
+        public List<Snowball> Balls = new List<Snowball>();
+        public int Timer, HitsL, HitsR;
+        public List<Penguin> All() { var a = new List<Penguin>(Left); a.AddRange(Right); return a; }
+    }
+
+    // Penguins hop onto each other's heads, Ziggy on top, until it wobbles and topples.
+    class Tower
+    {
+        public List<Penguin> Crew;          // [0] is the base, the rest climb in order
+        public float Site;
+        public int Built, Phase, Timer;     // Built = penguins in the stack so far
+    }
+
+    // Everyone dances in time; Ziggy DJs if he's there.
+    class Party
+    {
+        public List<Penguin> Crew;
+        public Penguin Dj;
+        public int Timer;
+    }
+
+    // Follow the leader: everyone marches in a line behind Ziggy.
+    class Parade
+    {
+        public Penguin Leader;
+        public List<Penguin> Line = new List<Penguin>();
+        public int Timer;
+    }
+
     class WinInfo { public IntPtr H; public Rectangle R; }
 
     // Movement history of a window that penguins are on (for riding along / shake detection).
@@ -798,14 +1042,14 @@ namespace DesktopPenguins
 
     class PenguinApp : ApplicationContext
     {
-        const int FALL = 0, WALK = 1, LOOK = 2, FLY = 3, WAVE = 4, SLEEP = 5, SLIDE = 6, DANCE = 7,
+        public const int FALL = 0, WALK = 1, LOOK = 2, FLY = 3, WAVE = 4, SLEEP = 5, SLIDE = 6, DANCE = 7,
                   HELD = 8, THROWN = 9, CURIOUS = 10, GREET = 11, RIDE = 12, CLIMB = 13, OFF = 14,
                   GOTO = 15, BUILD = 16, ADMIRE = 17, READY = 18, TUG = 19, WATCH = 20, YAWN = 21, SWAY = 22,
-                  FACEPLANT = 23, DAZED = 24;
+                  FACEPLANT = 23, DAZED = 24, PET = 25, FOLLOW = 26, FIGHT = 27, HOPUP = 28, PARTY = 29, SUMMON = 30;
         const int W = Art.W, H = Art.H;
         const int ShooTicks = 2000;    // ~60 s
 
-        readonly IntPtr[,] hbm = new IntPtr[2, Art.Frames];
+        readonly IntPtr[,,] hbm = new IntPtr[Art.Outfits, 2, Art.Frames];
         readonly IntPtr screenDC, memDC;
         readonly List<Penguin> penguins = new List<Penguin>();
         List<WinInfo> wins = new List<WinInfo>();
@@ -829,13 +1073,22 @@ namespace DesktopPenguins
             "Noodle", "Bean", "Socks", "Tofu", "Marble", "Button", "Crumble", "Snowy", "Pickle", "Fizz",
             "Toast", "Bramble", "Clover", "Ziggy", "Juniper", "Maple", "Sushi", "Pudding", "Tumble", "Wobble",
             "Frosty", "Peanut", "Olive", "Mittens", "Skipper", "Bubbles", "Cocoa", "Hazel", "Sleet", "Gizmo" };
-        readonly List<string> unusedNames = new List<string>(NamePool);
+        // The core six: always on screen, always these names (in this order).
+        static readonly string[] CoreNames = { "Pebble", "Waddles", "Wobble", "Puddle", "Ziggy", "Pip" };
+        public const int MinPenguins = 6;
+        static readonly string[] RandomPool = Array.FindAll(NamePool, n => Array.IndexOf(CoreNames, n) < 0);
+        readonly List<string> unusedNames = new List<string>(RandomPool);
         bool hiddenFs;
 
         // snowman & tug of war
         readonly IntPtr[] snowHbm = new IntPtr[SnowArt.Stages];
         Snowman snow;
         Tug tug;
+        Parade parade;
+        Fight fight;
+        Tower tower;
+        Party party;
+        IntPtr ballHbm;
 
         // typing / idle / cursor-wave detection
         readonly bool[] keyDown = new bool[256];
@@ -851,12 +1104,19 @@ namespace DesktopPenguins
         public PenguinApp(int count)
         {
             target = count;
-            var frames = Art.RenderAll();
-            for (int d = 0; d < 2; d++)
-                for (int f = 0; f < Art.Frames; f++)
-                    hbm[d, f] = Art.ToHBitmap(frames[d, f]);
+            Bitmap[,] frames = null;
+            for (int o = 0; o < Art.Outfits; o++)
+            {
+                var set = Art.RenderAll(o);
+                for (int d = 0; d < 2; d++)
+                    for (int f = 0; f < Art.Frames; f++)
+                        hbm[o, d, f] = Art.ToHBitmap(set[d, f]);
+                if (o == Art.NoOutfit) frames = set;
+                else foreach (var b in set) b.Dispose();
+            }
             for (int s = 0; s < SnowArt.Stages; s++)
                 using (var b = SnowArt.Render(s)) snowHbm[s] = Art.ToHBitmap(b);
+            using (var b = SnowArt.RenderBall()) ballHbm = Art.ToHBitmap(b);
             for (int i = 0; i < BubbleArt.Count; i++)
                 using (var b = BubbleArt.Render(i)) bubbleHbm[i] = Art.ToHBitmap(b);
             screenDC = Native.GetDC(IntPtr.Zero);
@@ -883,13 +1143,17 @@ namespace DesktopPenguins
             tray.Text = "Desktop Penguins";
             menu = new ContextMenuStrip();
             menu.Items.Add("Add a penguin", null, delegate { target = Math.Min(target + 1, 60); });
-            menu.Items.Add("Remove a penguin", null, delegate { target = Math.Max(target - 1, 0); });
+            menu.Items.Add("Remove a penguin", null, delegate { target = Math.Max(target - 1, MinPenguins); });
             var followItem = new ToolStripMenuItem("Follow the mouse");
             followItem.CheckOnClick = true;
             followItem.CheckedChanged += delegate { follow = followItem.Checked; };
             menu.Items.Add(followItem);
             menu.Items.Add("Build a snowman", null, delegate { StartSnowman(); });
             menu.Items.Add("Tug of war!", null, delegate { StartTug(); });
+            menu.Items.Add("Snowball fight!", null, delegate { StartFight(); });
+            menu.Items.Add("Penguin tower!", null, delegate { StartTower(); });
+            menu.Items.Add("Dance party!", null, delegate { StartParty(); });
+            menu.Items.Add("Follow Ziggy!", null, delegate { StartParade(); });
             menu.Items.Add(hotkeyOk ? "Shoo!  (Ctrl+Alt+P)" : "Shoo!", null, delegate { Shoo(); });
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, delegate { Quit(); });
@@ -911,6 +1175,7 @@ namespace DesktopPenguins
             foreach (var p in penguins) ClosePenguinWindows(p);
             if (snow != null) snow.Win.Close();
             if (tug != null && tug.Rope != null) tug.Rope.Close();
+            EndFight(null);
             ExitThread();
         }
 
@@ -1061,7 +1326,7 @@ namespace DesktopPenguins
             {
                 case WALK: case LOOK: case WAVE: case SLEEP: case DANCE: case CURIOUS: case GREET: case SLIDE: case CLIMB:
                 case GOTO: case BUILD: case ADMIRE: case READY: case WATCH: case YAWN: case SWAY:
-                case FACEPLANT: case DAZED:
+                case FACEPLANT: case DAZED: case PET: case FOLLOW: case FIGHT: case PARTY:
                     return true;
             }
             return false;
@@ -1074,7 +1339,7 @@ namespace DesktopPenguins
             {
                 case WALK: case LOOK: case WAVE: case SLEEP: case DANCE: case CURIOUS: case GREET: case RIDE:
                 case GOTO: case BUILD: case ADMIRE: case READY: case WATCH: case YAWN: case SWAY:
-                case DAZED:
+                case DAZED: case PET: case FOLLOW: case FIGHT: case PARTY:
                     return true;
             }
             return false;
@@ -1141,11 +1406,17 @@ namespace DesktopPenguins
         void Spawn()
         {
             var p = new Penguin();
+            if (penguins.Count < CoreNames.Length)
+                p.Name = CoreNames[penguins.Count];
+            else
+            {
+                if (unusedNames.Count == 0) unusedNames.AddRange(RandomPool);
+                int ni = rnd.Next(unusedNames.Count);
+                p.Name = unusedNames[ni];
+                unusedNames.RemoveAt(ni);
+            }
+            p.Me = Personality.For(p.Name);
             Reset(p);
-            if (unusedNames.Count == 0) unusedNames.AddRange(NamePool);
-            int ni = rnd.Next(unusedNames.Count);
-            p.Name = unusedNames[ni];
-            unusedNames.RemoveAt(ni);
             p.Win = new SpriteWindow();
             p.Win.MouseDown += delegate(object s, MouseEventArgs e) { Grab(p, e); };
             p.Win.MouseUp += delegate { Release(p); };
@@ -1191,7 +1462,7 @@ namespace DesktopPenguins
             {
                 if (p.TagWin == null)
                 {
-                    using (var b = BubbleArt.RenderTag(p.Name)) { p.TagBmp = Art.ToHBitmap(b); p.TagW = b.Width; }
+                    using (var b = BubbleArt.RenderTag(p.Name, p.Me.Leader)) { p.TagBmp = Art.ToHBitmap(b); p.TagW = b.Width; }
                     p.TagWin = new SpriteWindow(p.TagW, 18, true);
                     p.TagWin.Show();
                 }
@@ -1233,7 +1504,8 @@ namespace DesktopPenguins
             p.X = sb.Left + W + rnd.Next(Math.Max(1, sb.Width - 2 * W));
             p.Y = sb.Top - 2;
             p.Dir = rnd.Next(2) == 0 ? 1 : -1;
-            p.Speed = 1.2f + (float)rnd.NextDouble() * 1.0f;
+            p.Speed = p.Me.SpeedMin + (float)rnd.NextDouble() * p.Me.SpeedRange;
+            p.PetTicks = 0;
             p.Shooed = false;
             StartFalling(p, rnd.Next(100) < 60);   // most arrive by umbrella
         }
@@ -1333,8 +1605,8 @@ namespace DesktopPenguins
             foreach (var q in penguins)
             {
                 if (q == p || q.Rider != null || q.Base == p || !CanCarry(q)) continue;
-                int top = (int)(q.Y + q.HopOff) - Art.HeadH;
-                if (Math.Abs(q.X - p.X) < 11 && top > y0 && top <= y1 && top < best) { best = top; head = q; }
+                int top = (int)(q.Y + q.HopOff) - HeadOf(q);
+                if (Math.Abs(q.X - p.X) < 13 && top > y0 && top <= y1 && top < best) { best = top; head = q; }
             }
 
             if (head != null)
@@ -1359,14 +1631,21 @@ namespace DesktopPenguins
             {   // long idle: naps
                 p.State = SLEEP; p.Timer = 300 + rnd.Next(300); Say(p, BubbleArt.Zzz, 70); return;
             }
-            int r = rnd.Next(100);
-            if (r < 20)      { p.State = LOOK;  p.Timer = 70 + rnd.Next(60); }
-            else if (r < 35) { p.State = WAVE;  p.Timer = 50 + rnd.Next(40); }
-            else if (r < 47) { p.State = SLEEP; p.Timer = 160 + rnd.Next(200); Say(p, BubbleArt.Zzz, 70); }
-            else if (r < 65) { p.State = SLIDE; p.SlideV = 5f + (float)rnd.NextDouble() * 2f; }
-            else if (r < 77) { p.State = DANCE; p.Timer = 80 + rnd.Next(60); Say(p, BubbleArt.Note); }
-            else if (r < 93) { p.HopV = -3.4f; }                                  // hop while walking
-            else             { p.State = FLY; p.OnFloor = false; p.Surf = IntPtr.Zero; p.FlyBaseY = p.Y; }
+            // pick by this penguin's weights: look, wave, sleep, slide, dance, hop, fly
+            var w = p.Me.Weights;
+            int total = 0; foreach (int v in w) total += v;
+            int r = rnd.Next(total), pick = 0;
+            while (pick < w.Length - 1 && r >= w[pick]) r -= w[pick++];
+            switch (pick)
+            {
+                case 0: p.State = LOOK;  p.Timer = 70 + rnd.Next(60); break;
+                case 1: p.State = WAVE;  p.Timer = 50 + rnd.Next(40); break;
+                case 2: p.State = SLEEP; p.Timer = 160 + rnd.Next(200); Say(p, BubbleArt.Zzz, 70); break;
+                case 3: p.State = SLIDE; p.SlideV = p.Me.SlideMin + (float)rnd.NextDouble() * 2f; break;
+                case 4: p.State = DANCE; p.Timer = 80 + rnd.Next(60); Say(p, BubbleArt.Note); break;
+                case 5: p.HopV = -3.4f; break;                                    // hop while walking
+                default: p.State = FLY; p.OnFloor = false; p.Surf = IntPtr.Zero; p.FlyBaseY = p.Y; break;
+            }
         }
 
         // Walking into the side of a window: maybe climb it.
@@ -1379,15 +1658,15 @@ namespace DesktopPenguins
                 if (wins[i].H == p.Surf) continue;
                 var r = wins[i].R;
                 int edge = p.Dir > 0 ? r.Left : r.Right;
-                bool reaching = p.Dir > 0 ? (p.X + 8 <= edge && nx + 8 > edge) : (p.X - 8 >= edge && nx - 8 < edge);
+                bool reaching = p.Dir > 0 ? (p.X + 10 <= edge && nx + 10 > edge) : (p.X - 10 >= edge && nx - 10 < edge);
                 if (!reaching) continue;
-                if (r.Top >= y - 20 || r.Bottom < y - 25) continue;           // must rise above and reach down to it
+                if (r.Top >= y - 24 || r.Bottom < y - 30) continue;           // must rise above and reach down to it
                 if (Covered(i, edge + p.Dir * 2, y - 15)) continue;           // that side isn't visible here
-                if (!Standable(i, edge + p.Dir * 14, r.Top)) continue;        // nowhere to stand at the top
+                if (!Standable(i, edge + p.Dir * 17, r.Top)) continue;        // nowhere to stand at the top
                 p.ClimbCool = 150;
-                if (rnd.Next(100) >= 65) { Puzzled(p); return false; }        // bumped into it: "?" and walk past
+                if (rnd.Next(100) >= p.Me.ClimbPct) { Puzzled(p); return false; }   // bumped into it: "?" and walk past
                 p.State = CLIMB; p.Tick = 0; p.OnFloor = false; p.Surf = wins[i].H;
-                p.X = edge - p.Dir * 9;
+                p.X = edge - p.Dir * 11;
                 EnsureTrack(p.Surf);
                 return true;
             }
@@ -1401,7 +1680,7 @@ namespace DesktopPenguins
             float nx = p.X + p.Dir * speed;
             int ix = (int)nx;
             if (ix < virt.Left + 20 || ix >= virt.Right - 20) { p.Dir = -p.Dir; Puzzled(p); return; }   // screen edge
-            if (p.State == WALK && TryClimb(p, nx)) return;
+            if (p.State == WALK && p.Job == null && TryClimb(p, nx)) return;
             if (p.OnFloor)
             {
                 int f = FloorAt(ix);
@@ -1492,12 +1771,46 @@ namespace DesktopPenguins
                 {   // standing on another penguin's head
                     var b = p.Base;
                     if (b == null || !penguins.Contains(b) || b.Rider != p || !CanCarry(b)) { StartFalling(p, false); return; }
-                    p.X = b.X; p.Y = b.Y + b.HopOff - Art.HeadH;
+                    p.X = b.X; p.Y = b.Y + b.HopOff - HeadOf(b);
                     if (--p.Timer <= 0)
                     {   // hop off sideways
                         Detach(p);
                         p.State = THROWN; p.Tick = 0; p.Spin = false; p.AfterLand = LOOK;
                         p.Vx = p.Dir * 2.5f; p.Vy = -4.5f;
+                    }
+                    return;
+                }
+
+                case SUMMON:
+                {   // called to an activity: flap over in an arc and land on the spot
+                    float k = Math.Min(1f, p.Tick / (float)Math.Max(1, p.Timer));
+                    float arc = Math.Min(110f, 30f + Math.Abs(p.TargetX - p.HopFromX) * 0.15f);
+                    p.X = p.HopFromX + (p.TargetX - p.HopFromX) * k;
+                    p.Y = p.HopFromY + (p.SummonY - p.HopFromY) * k - (float)Math.Sin(k * Math.PI) * arc;
+                    p.Dir = p.TargetX >= p.HopFromX ? 1 : -1;
+                    if (k >= 1f)
+                    {
+                        int f = FloorAt((int)p.X);
+                        p.Y = f != int.MinValue ? f : p.SummonY;
+                        p.OnFloor = true; p.Surf = IntPtr.Zero;
+                        p.Dir = p.FaceDir; p.State = p.NextState; p.Tick = 0;
+                    }
+                    return;
+                }
+
+                case HOPUP:
+                {   // tower: arc up onto the head of whoever is on top
+                    var onto = p.HopOnto;
+                    if (onto == null || !penguins.Contains(onto) || onto.Rider != null || !CanCarry(onto))
+                    { p.HopOnto = null; StartFalling(p, false); return; }
+                    float k = Math.Min(1f, p.Tick / 28f);
+                    float tx = onto.X, ty = onto.Y + onto.HopOff - HeadOf(onto);
+                    p.X = p.HopFromX + (tx - p.HopFromX) * k;
+                    p.Y = p.HopFromY + (ty - p.HopFromY) * k - (float)Math.Sin(k * Math.PI) * 30f;
+                    if (k >= 1f)
+                    {
+                        p.State = RIDE; p.Base = onto; onto.Rider = p; p.HopOnto = null;
+                        p.Timer = 1000000; p.Tick = 0;           // stay up until the tower comes down
                     }
                     return;
                 }
@@ -1508,12 +1821,12 @@ namespace DesktopPenguins
                     if (!tracks.TryGetValue(p.Surf, out t)) { StartFalling(p, false); return; }
                     var r = t.R;
                     int edge = p.Dir > 0 ? r.Left : r.Right;
-                    p.X = edge - p.Dir * 9;
+                    p.X = edge - p.Dir * 11;
                     p.Y -= 2f;
-                    if (p.Y - 30 > r.Bottom) { StartFalling(p, false); return; }   // the window moved away
+                    if (p.Y - 36 > r.Bottom) { StartFalling(p, false); return; }   // the window moved away
                     if (p.Y <= r.Top)
                     {   // made it: step onto the top
-                        p.Y = r.Top; p.X = edge + p.Dir * 14;
+                        p.Y = r.Top; p.X = edge + p.Dir * 17;
                         if (StillSupported(p)) { p.State = LOOK; p.Timer = 30; p.Tick = 0; p.ClimbCool = 150; }
                         else StartFalling(p, false);
                     }
@@ -1530,8 +1843,43 @@ namespace DesktopPenguins
             }
             else if (!StillSupported(p)) { StartFalling(p, false); return; }
 
+            // Petting: rest the cursor on a calm penguin for ~1.5 s and it leans into it.
+            bool calm = (p.State == WALK && p.HopOff == 0) || p.State == LOOK || p.State == CURIOUS;
+            if (p.Hovered && calm && p.Cooldown == 0 && p.Job == null && p.Rider == null)
+            {
+                if (++p.PetTicks >= 45) { p.State = PET; p.Tick = 0; p.Timer = 25; Say(p, BubbleArt.Heart, 50); return; }
+            }
+            else if (p.State != PET) p.PetTicks = 0;
+
             switch (p.State)
             {
+                case FOLLOW:
+                {   // keep my place in Ziggy's line
+                    var pr = parade;
+                    if (pr == null || p.Job != pr) { p.Job = null; p.State = WALK; p.Tick = 0; return; }
+                    int place = pr.Line.IndexOf(p) + 1;
+                    var lead = pr.Leader;
+                    p.TargetX = lead.X - lead.Dir * 31 * place;
+                    float gx = p.TargetX - p.X;
+                    if (Math.Abs(gx) < 2.5f) { p.Dir = lead.Dir; return; }
+                    p.Dir = gx > 0 ? 1 : -1;
+                    Move(p, Math.Min(Math.Abs(gx), 2.8f));
+                    return;
+                }
+                case PET:
+                {
+                    p.Dir = Cursor.Position.X >= p.X ? 1 : -1;               // lean toward the hand
+                    if (p.Hovered) p.Timer = 25;                              // keep going while the cursor stays
+                    else if (--p.Timer <= 0) { p.State = WALK; p.Tick = 0; p.Cooldown = 120; p.PetTicks = 0; return; }
+                    if (p.Tick % p.Me.PetHearts == 0) Say(p, BubbleArt.Heart, 45);
+                    if (p.Me.PetLimit > 0 && p.Tick >= p.Me.PetLimit)
+                    {   // Pebble dozes off; Ziggy gets fidgety and dances away
+                        p.PetTicks = 0; p.Tick = 0; p.Cooldown = 200;
+                        if (p.Me.PetEnd == SLEEP) { p.State = SLEEP; p.Timer = 250 + rnd.Next(200); Say(p, BubbleArt.Zzz, 70); }
+                        else { p.State = DANCE; p.Timer = 70; Say(p, BubbleArt.Note); }
+                    }
+                    return;
+                }
                 case LOOK:
                 case WAVE:
                 case SLEEP:
@@ -1570,6 +1918,8 @@ namespace DesktopPenguins
                     return;
                 case READY:        // waiting at the rope
                 case BUILD:        // patting snow
+                case FIGHT:        // snowball fight (driven by UpdateFight)
+                case PARTY:        // dancing (driven by UpdateParty)
                     p.Dir = p.FaceDir;
                     return;
                 case GOTO:
@@ -1582,7 +1932,11 @@ namespace DesktopPenguins
                     }
                     p.Dir = gx > 0 ? 1 : -1;
                     Move(p, Math.Min(p.Speed + 0.6f, Math.Abs(gx)));
-                    if (p.State == GOTO && --p.Timer <= 0) { p.Job = null; p.State = WALK; }   // couldn't get there
+                    if (p.State == GOTO && --p.Timer <= 0)
+                    {   // couldn't get there: the core five fly the rest of the way, others give up
+                        if (IsCore(p)) Summon(p);
+                        else { p.Job = null; p.State = WALK; }
+                    }
                     return;
                 }
                 case GREET:
@@ -1601,7 +1955,7 @@ namespace DesktopPenguins
                 case CURIOUS:
                 {   // watch the cursor; wave when it comes close
                     var c = Cursor.Position;
-                    float dx = c.X - p.X, dy = c.Y - (p.Y - 20);
+                    float dx = c.X - p.X, dy = c.Y - (p.Y - 24);
                     double dist = Math.Sqrt(dx * dx + dy * dy);
                     p.Dir = dx >= 0 ? 1 : -1;
                     p.Near = dist < 50;
@@ -1612,6 +1966,11 @@ namespace DesktopPenguins
 
             // Walking (maybe mid-hop)
             if (p.Cooldown > 0) p.Cooldown--;
+            if (parade != null && p.Job == parade)
+            {   // leading the parade: a steady march, no distractions
+                Move(p, 1.7f);
+                return;
+            }
             if (p.HopV != 0 || p.HopOff != 0)
             {
                 p.HopOff += p.HopV; p.HopV += 0.22f;
@@ -1620,9 +1979,9 @@ namespace DesktopPenguins
             else
             {
                 var c = Cursor.Position;
-                float dx = c.X - p.X, dy = c.Y - (p.Y - 20);
+                float dx = c.X - p.X, dy = c.Y - (p.Y - 24);
                 if (dx * dx + dy * dy < 80 * 80) p.NearTicks++; else p.NearTicks = 0;
-                if (p.Cooldown == 0 && p.NearTicks >= 16)
+                if (p.Cooldown == 0 && p.NearTicks >= p.Me.CuriousTicks)
                 {   // the cursor lingered nearby (~0.5 s): stop and look at it
                     p.NearTicks = 0;
                     p.State = CURIOUS; p.Timer = 300; p.Tick = 0; p.Near = false;
@@ -1634,15 +1993,60 @@ namespace DesktopPenguins
                     else { p.State = LOOK; p.Timer = 20; return; }      // arrived under the cursor
                 }
                 else if (rnd.Next(700) == 0) p.Dir = -p.Dir;
+                if (!follow && p.Me.TagAlong && p.Tick % 30 == 0)
+                {   // little brother: hurry after the nearest big sibling, and sometimes copy them
+                    var big = NearestSibling(p);
+                    if (big != null)
+                    {
+                        float gap = big.X - p.X;
+                        if (Math.Abs(gap) > 90) p.Dir = gap > 0 ? 1 : -1;
+                        else if (Math.Abs(gap) < 60 && rnd.Next(3) == 0 && CopyOf(p, big)) return;
+                    }
+                }
                 if (idleMs > 30000 && rnd.Next(500) == 0)
                 {   // you've been away a while: yawn
                     p.State = YAWN; p.Timer = 55; p.Tick = 0;
                     Say(p, BubbleArt.Zzz, 55);
                     return;
                 }
-                if (rnd.Next(follow ? 900 : 240) == 0) { StartBehaviour(p); return; }
+                if (p.Me.TripOdds > 0 && rnd.Next(p.Me.TripOdds) == 0)
+                {   // tripped over nothing at all
+                    p.State = FACEPLANT; p.Timer = 50; p.Tick = 0;
+                    Say(p, BubbleArt.Bang, 45);
+                    return;
+                }
+                if (rnd.Next(follow ? 900 : p.Me.Restless) == 0) { StartBehaviour(p); return; }
             }
             Move(p, p.Speed);
+        }
+
+        // The closest other core penguin on the same surface (for Pip to tag along after).
+        Penguin NearestSibling(Penguin p)
+        {
+            Penguin best = null;
+            float bestD = 700;
+            foreach (var q in penguins)
+            {
+                if (q == p || !IsCore(q) || q.Job != null || q.OnFloor != p.OnFloor || q.Surf != p.Surf || Math.Abs(q.Y - p.Y) > 1) continue;
+                float d = Math.Abs(q.X - p.X);
+                if (d < bestD) { bestD = d; best = q; }
+            }
+            return best;
+        }
+
+        // Do whatever the big sibling is doing.
+        bool CopyOf(Penguin p, Penguin big)
+        {
+            p.Tick = 0;
+            switch (big.State)
+            {
+                case SLEEP: p.State = SLEEP; p.Timer = 150 + rnd.Next(100); Say(p, BubbleArt.Zzz, 60); return true;
+                case DANCE: p.State = DANCE; p.Timer = 80; Say(p, BubbleArt.Note); return true;
+                case WAVE: case GREET: p.State = WAVE; p.Timer = 50; return true;
+                case LOOK: case CURIOUS: p.State = LOOK; p.Timer = 50; p.Dir = big.Dir; return true;
+                case SLIDE: p.State = SLIDE; p.Dir = big.Dir; p.SlideV = Math.Max(4f, big.SlideV); return true;
+            }
+            return false;
         }
 
         // Two walking penguins that meet face each other and wave, then part ways or slide off together.
@@ -1651,14 +2055,15 @@ namespace DesktopPenguins
             for (int i = 0; i < penguins.Count; i++)
             {
                 var a = penguins[i];
-                if (a.State != WALK || a.BumpCool > 0 || a.HopOff != 0) continue;
+                if (a.State != WALK || a.BumpCool > 0 || a.HopOff != 0 || a.Job != null) continue;
                 for (int j = i + 1; j < penguins.Count; j++)
                 {
                     var b = penguins[j];
-                    if (b.State != WALK || b.BumpCool > 0 || b.HopOff != 0) continue;
+                    if (b.State != WALK || b.BumpCool > 0 || b.HopOff != 0 || b.Job != null) continue;
                     if (a.OnFloor != b.OnFloor || a.Surf != b.Surf || Math.Abs(a.Y - b.Y) > 1) continue;
                     float gap = b.X - a.X;
-                    if (Math.Abs(gap) > 26 || gap * a.Dir <= 0 || -gap * b.Dir <= 0) continue;   // not approaching
+                    int range = Math.Max(a.Me.GreetRange, b.Me.GreetRange);           // the friendly ones say hi from further off
+                    if (Math.Abs(gap) > range || gap * a.Dir <= 0 || -gap * b.Dir <= 0) continue;   // not approaching
 
                     bool together = rnd.Next(100) < 30;
                     int slideDir = rnd.Next(2) == 0 ? 1 : -1;
@@ -1710,6 +2115,25 @@ namespace DesktopPenguins
                     return Art.Stand;
                 case CLIMB: return (p.Tick / 8) % 2 == 0 ? Art.ClimbA : Art.ClimbB;
                 case OFF: return Art.Stand;
+                case PET: return (p.Tick / 14) % 2 == 0 ? Art.PetA : Art.PetB;    // nuzzling the cursor
+                case HOPUP: return Art.ArmsUp;
+                case SUMMON: return (p.Tick / 5) % 2 == 0 ? Art.FlyA : Art.FlyB;
+                case FIGHT:
+                    if (p.HitTimer > 0) return (p.HitTimer / 9) % 2 == 0 ? Art.DazedA : Art.DazedB;   // got one in the face
+                    if (p.ThrowAnim > 8) return Art.WaveB;                                         // wind up...
+                    if (p.ThrowAnim > 0) return Art.FlyA;                                          // ...and throw
+                    if (p.ThrowCool < 30) return (p.Tick / 8) % 2 == 0 ? Art.BuildA : Art.BuildB;  // scooping up snow
+                    return Art.Stand;
+                case PARTY:
+                {
+                    if (party != null && p == party.Dj) return (ticks / 5) % 2 == 0 ? Art.TypeA : Art.TypeB;   // on the decks
+                    int beat = ticks / 10;                                   // everyone on the same beat
+                    if ((beat / 4) % 2 == 1) drawDir = -p.Dir;
+                    switch (beat % 4) { case 0: case 2: return Art.ArmsUp; case 1: return Art.WaveA; default: return Art.WaveB; }
+                }
+                case FOLLOW:
+                    if (Math.Abs(p.TargetX - p.X) < 2.5f) return Art.Stand;      // caught up: wait in line
+                    return (p.Tick / 7) % 2 == 0 ? Art.WalkA : Art.WalkB;
                 case GOTO: return (p.Tick / 7) % 2 == 0 ? Art.WalkA : Art.WalkB;
                 case READY:
                 case ADMIRE: return Art.Stand;
@@ -1750,14 +2174,35 @@ namespace DesktopPenguins
         }
 
         // Up to `max` free penguins on the same stretch of floor, nearest to a random leader first.
-        List<Penguin> PickGroup(int max)
+        static int HeadOf(Penguin p) { return p.Me.Small ? (int)Math.Round(Art.HeadH * Art.SmallScale) : Art.HeadH; }
+
+        static bool IsCore(Penguin p) { return Array.IndexOf(CoreNames, p.Name) >= 0; }
+
+        // A core penguin can be called away from anything except being held or shooed.
+        static bool Recruitable(Penguin p) { return IsCore(p) && p.State != HELD && p.State != OFF && p.Job == null; }
+
+        // The group for an activity: all of the core five, wherever they are, plus free extras
+        // standing nearby on the same floor, up to `max`. group[0] is the one in charge.
+        List<Penguin> PickGroup(int max, Penguin lead = null)
         {
-            var free = penguins.FindAll(Available);
-            if (free.Count < 2) return null;
-            var lead = free[rnd.Next(free.Count)];
-            var group = free.FindAll(q => (int)q.Y == (int)lead.Y && Math.Abs(q.X - lead.X) < 900);
+            var core = penguins.FindAll(Recruitable);
+            var free = penguins.FindAll(q => Available(q) && !IsCore(q));
+            if (lead == null)
+                lead = core.Find(q => q.Me.Leader && Available(q)) ?? core.Find(Available)        // Ziggy takes charge when free
+                    ?? core.Find(q => q.Me.Leader) ?? (core.Count > 0 ? core[0] : null)
+                    ?? (free.Count > 0 ? free[rnd.Next(free.Count)] : null);
+            if (lead == null) return null;
+            int fy = FloorAt((int)lead.X);
+            if (fy == int.MinValue) fy = (int)lead.Y;
+            var group = new List<Penguin>(core);
+            group.Remove(lead);
+            var extras = free.FindAll(q => q != lead && (int)q.Y == fy && Math.Abs(q.X - lead.X) < 900);
+            extras.Sort((a, b) => Math.Abs(a.X - lead.X).CompareTo(Math.Abs(b.X - lead.X)));
+            int room = Math.Max(0, max - group.Count - 1);
+            if (extras.Count > room) extras.RemoveRange(room, extras.Count - room);
+            group.AddRange(extras);
             group.Sort((a, b) => Math.Abs(a.X - lead.X).CompareTo(Math.Abs(b.X - lead.X)));
-            if (group.Count > max) group.RemoveRange(max, group.Count - max);
+            group.Insert(0, lead);
             return group.Count >= 2 ? group : null;
         }
 
@@ -1767,19 +2212,336 @@ namespace DesktopPenguins
             return workAreas[0];
         }
 
+        // Send a penguin to its spot for an activity: walk there along the floor if it can,
+        // otherwise (on a window, in the air, another floor, busy riding...) fly straight over.
         void SendTo(Penguin p, object job, float x, int face, int then)
         {
-            p.Job = job; p.State = GOTO; p.Tick = 0; p.Timer = 900;
+            if (p.Base != null) { if (p.Base.Rider == p) p.Base.Rider = null; p.Base = null; }
+            p.Job = job; p.Tick = 0; p.HopOff = 0; p.HopV = 0;
             p.TargetX = x; p.FaceDir = face; p.NextState = then;
+            int fy = FloorAt((int)x);
+            bool walk = p.OnFloor && StandsOnSurface(p) && p.State != CLIMB && fy != int.MinValue && Math.Abs(fy - (int)p.Y) <= 1;
+            if (walk) { p.State = GOTO; p.Timer = IsCore(p) ? 300 : 900; }
+            else Summon(p);
+        }
+
+        void Summon(Penguin p)
+        {
+            if (p.Base != null) { if (p.Base.Rider == p) p.Base.Rider = null; p.Base = null; }
+            int fy = FloorAt((int)p.TargetX);
+            p.SummonY = fy != int.MinValue ? fy : p.Y;
+            p.HopFromX = p.X; p.HopFromY = p.Y;
+            float dist = Math.Abs(p.TargetX - p.X) + Math.Abs(p.SummonY - p.Y);
+            p.Timer = (int)Clamp(dist / 9f, 30, 130);
+            p.State = SUMMON; p.Tick = 0;
+            p.OnFloor = false; p.Surf = IntPtr.Zero; p.Umbrella = false; p.Spin = false; p.HopOff = 0; p.HopV = 0;
+            Say(p, BubbleArt.Bang, 40);                                       // "coming!"
+        }
+
+        bool GroupBusy()
+        {
+            return snow != null || tug != null || parade != null || fight != null || tower != null || party != null;
+        }
+
+        static float Clamp(float v, float lo, float hi) { return Math.Max(lo, Math.Min(hi, v)); }
+
+        // ---- snowball fight
+
+        void StartFight()
+        {
+            if (GroupBusy() || ticks < shooUntil) return;
+            var group = PickGroup(8);
+            if (group == null) return;
+            var wa = WorkAreaAt(group[0].X);
+            float c = Clamp(group[0].X, wa.Left + 230, wa.Right - 230);
+            var f = new Fight { Timer = 900 };
+            for (int i = 0; i < group.Count; i++)
+            {
+                var team = i % 2 == 0 ? f.Left : f.Right;
+                int side = team == f.Left ? -1 : 1;
+                var p = group[i];
+                float x = c + side * (90 + team.Count * 36);
+                team.Add(p);
+                p.ThrowCool = 30 + rnd.Next(60); p.ThrowAnim = 0; p.HitTimer = 0;
+                SendTo(p, f, x, -side, FIGHT);
+            }
+            fight = f;
+        }
+
+        void Throw(Fight f, Penguin p, bool fromLeft)
+        {
+            var targets = (fromLeft ? f.Right : f.Left).FindAll(q => q.State == FIGHT || q.State == GOTO);
+            if (targets.Count == 0) return;
+            var t = targets[rnd.Next(targets.Count)];
+            const float T = 38f, grav = 0.25f;
+            var b = new Snowball { X = p.X + p.Dir * 12, Y = p.Y - 38, FromLeft = fromLeft };
+            float tx = t.X + rnd.Next(-14, 15), ty = t.Y - 22;              // not everyone's a good shot
+            b.Vx = (tx - b.X) / T;
+            b.Vy = (ty - b.Y) / T - 0.5f * grav * T;
+            b.Win = new SpriteWindow(SnowArt.BallSize, SnowArt.BallSize, true);
+            b.Win.Show();
+            f.Balls.Add(b);
+        }
+
+        void UpdateFight()
+        {
+            var f = fight;
+            if (f == null) return;
+            f.Left.RemoveAll(q => q.Job != f);
+            f.Right.RemoveAll(q => q.Job != f);
+            if (f.Left.Count == 0 || f.Right.Count == 0) { EndFight(null); return; }
+
+            bool started = false;
+            foreach (var team in new[] { f.Left, f.Right })
+                foreach (var p in team)
+                {
+                    if (p.State != FIGHT) continue;
+                    started = true;
+                    if (p.HitTimer > 0) { p.HitTimer--; continue; }
+                    if (p.ThrowAnim > 0) { if (--p.ThrowAnim == 8) Throw(f, p, team == f.Left); continue; }
+                    if (--p.ThrowCool <= 0) { p.ThrowAnim = 16; p.ThrowCool = 45 + rnd.Next(70); }
+                }
+
+            for (int i = f.Balls.Count - 1; i >= 0; i--)
+            {
+                var b = f.Balls[i];
+                b.Vy += 0.25f; b.X += b.Vx; b.Y += b.Vy;
+                bool gone = false;
+                foreach (var t in b.FromLeft ? f.Right : f.Left)
+                {
+                    if (t.State != FIGHT || Math.Abs(b.X - t.X) > 13 || Math.Abs(b.Y - (t.Y - 22)) > 18) continue;
+                    t.HitTimer = 36; t.ThrowAnim = 0;                         // splat!
+                    Say(t, BubbleArt.Bang, 40);
+                    if (b.FromLeft) f.HitsL++; else f.HitsR++;
+                    gone = true;
+                    break;
+                }
+                int floor = FloorAt((int)b.X);
+                if (!gone && ((floor != int.MinValue && b.Y > floor) || b.Y > virt.Bottom || b.X < virt.Left || b.X > virt.Right)) gone = true;
+                if (gone) { b.Win.Close(); f.Balls.RemoveAt(i); continue; }
+                b.Win.Draw(screenDC, memDC, ballHbm, (int)b.X - SnowArt.BallSize / 2, (int)b.Y - SnowArt.BallSize / 2);
+            }
+
+            if (started && --f.Timer <= 0)
+                EndFight(f.HitsL > f.HitsR ? f.Left : f.HitsR > f.HitsL ? f.Right : null);
+        }
+
+        void EndFight(List<Penguin> winners)
+        {
+            var f = fight;
+            if (f == null) return;
+            fight = null;
+            foreach (var b in f.Balls) b.Win.Close();
+            foreach (var p in f.All())
+            {
+                if (p.Job != f) continue;
+                p.Job = null; p.Tick = 0; p.HitTimer = 0; p.ThrowAnim = 0;
+                if (winners == null) { p.State = LOOK; p.Timer = 40; }
+                else if (winners.Contains(p)) { p.State = DANCE; p.Timer = 90; Say(p, BubbleArt.Note); }
+                else { p.State = DAZED; p.Timer = 60; }                       // snowed under
+            }
+        }
+
+        // ---- penguin tower
+
+        void StartTower()
+        {
+            if (GroupBusy() || ticks < shooUntil) return;
+            var crew = PickGroup(6);
+            if (crew == null || crew.Count < 3) return;
+            var lead = crew.Find(q => q.Me.Leader);
+            var small = crew.Find(q => q.Me.Small);
+            if (lead != null) { crew.Remove(lead); crew.Add(lead); }        // the leader lifts...
+            if (small != null) { crew.Remove(small); crew.Add(small); }     // ...little brother up to the very top
+            var wa = WorkAreaAt(crew[0].X);
+            float site = Clamp(crew[0].X, wa.Left + 170, wa.Right - 100);
+            var t = new Tower { Crew = crew, Site = site };
+            for (int i = 0; i < crew.Count; i++)
+                SendTo(crew[i], t, i == 0 ? site : site - 43 - (i - 1) * 31, 1, READY);   // the rest queue up behind
+            tower = t;
+        }
+
+        void UpdateTower()
+        {
+            var t = tower;
+            if (t == null) return;
+            foreach (var p in t.Crew) if (p.Job != t) { EndTower(false); return; }   // someone was taken away
+            var bottom = t.Crew[0];
+            switch (t.Phase)
+            {
+                case 0:     // stacking
+                    if (t.Built == 0) { if (bottom.State == READY) t.Built = 1; return; }
+                    var next = t.Crew[t.Built];
+                    if (next.State == READY)
+                    {   // hop on!
+                        next.State = HOPUP; next.Tick = 0; next.HopOnto = t.Crew[t.Built - 1];
+                        next.HopFromX = next.X; next.HopFromY = next.Y;
+                        next.OnFloor = false; next.Surf = IntPtr.Zero;
+                    }
+                    else if (next.State == RIDE)
+                    {
+                        if (++t.Built == t.Crew.Count)
+                        {   // done: everyone cheers
+                            t.Phase = 1; t.Timer = 200;
+                            foreach (var p in t.Crew) Say(p, BubbleArt.Heart, 60);
+                        }
+                    }
+                    return;
+                case 1:     // admire it for a bit
+                    if (--t.Timer <= 0) { t.Phase = 2; t.Timer = 80; Say(t.Crew[t.Crew.Count - 1], BubbleArt.Bang, 60); }
+                    return;
+                default:    // uh oh: it wobbles more and more, then over it goes
+                    bottom.X = t.Site + (float)Math.Sin(t.Timer * 0.45) * (2 + (80 - t.Timer) * 0.09f);
+                    if (--t.Timer <= 0) EndTower(true);
+                    return;
+            }
+        }
+
+        void EndTower(bool topple)
+        {
+            var t = tower;
+            if (t == null) return;
+            tower = null;
+            int dir = rnd.Next(2) == 0 ? 1 : -1;
+            for (int i = t.Crew.Count - 1; i >= 0; i--)
+            {
+                var p = t.Crew[i];
+                if (p.Job != t) continue;
+                p.Job = null; p.Tick = 0;
+                if (!topple)
+                {   // called off: riders hop down soon, the rest wander away
+                    if (p.State == RIDE) p.Timer = 20 + rnd.Next(40);
+                    else if (p.State == HOPUP) { p.HopOnto = null; StartFalling(p, false); }
+                    else { p.State = LOOK; p.Timer = 40; }
+                    continue;
+                }
+                if (i == 0) { p.X = t.Site; p.State = FACEPLANT; p.Timer = 60; continue; }
+                Detach(p);
+                p.State = THROWN; p.Spin = true; p.AfterLand = FACEPLANT;
+                p.Vx = dir * (1.5f + i * 1.2f); p.Vy = -3f - i * 0.5f;
+                p.OnFloor = false; p.Surf = IntPtr.Zero;
+                Say(p, BubbleArt.Bang, 40);
+            }
+        }
+
+        // ---- dance party
+
+        void StartParty()
+        {
+            if (GroupBusy() || ticks < shooUntil) return;
+            var crew = PickGroup(10);
+            if (crew == null) return;
+            var dj = crew.Find(q => q.Me.Leader);
+            var wa = WorkAreaAt(crew[0].X);
+            float c = Clamp(crew[0].X, wa.Left + 190, wa.Right - 190);
+            var pa = new Party { Crew = crew, Dj = dj, Timer = 650 };
+            int slot = 0;
+            foreach (var p in crew)
+            {
+                if (p == dj) { SendTo(p, pa, c, 1, PARTY); continue; }
+                slot++;
+                int side = slot % 2 == 1 ? -1 : 1, rank = (slot + 1) / 2;
+                SendTo(p, pa, c + side * (dj != null ? 6 + rank * 36 : rank * 36 - 18), -side, PARTY);
+            }
+            Say(crew[0], BubbleArt.Note);
+            party = pa;
+        }
+
+        void UpdateParty()
+        {
+            var pa = party;
+            if (pa == null) return;
+            pa.Crew.RemoveAll(q => q.Job != pa);
+            if (pa.Crew.Count < 2) { EndParty(); return; }
+            if (!pa.Crew.Exists(q => q.State == PARTY)) return;                     // still gathering
+            foreach (var p in pa.Crew)
+                if (p.State == PARTY && p != pa.Dj) p.HopOff = (ticks / 10) % 2 == 0 ? -3 : 0;   // bounce on the beat
+            if (ticks % 45 == 0)
+            {
+                var q = pa.Crew[rnd.Next(pa.Crew.Count)];
+                if (q.State == PARTY) Say(q, BubbleArt.Note, 40);
+            }
+            if (--pa.Timer <= 0) EndParty();
+        }
+
+        void EndParty()
+        {
+            var pa = party;
+            if (pa == null) return;
+            party = null;
+            foreach (var p in pa.Crew)
+            {
+                if (p.Job != pa) continue;
+                p.Job = null; p.HopOff = 0; p.Tick = 0;
+                p.State = LOOK; p.Timer = 40;
+                Say(p, BubbleArt.Heart, 50);
+            }
+        }
+
+        // ---- parade
+
+        // Ziggy shouts "!" and everyone free on the same stretch of floor falls in line behind.
+        void StartParade()
+        {
+            if (GroupBusy() || ticks < shooUntil) return;
+            var lead = penguins.Find(q => q.Me.Leader && q.State != HELD && q.State != OFF);
+            if (lead == null) return;
+            var group = PickGroup(12, lead);
+            if (group == null) return;
+            var line = group.GetRange(1, group.Count - 1);                     // nearest at the front
+            var pip = line.Find(q => q.Me.TagAlong);
+            if (pip != null) { line.Remove(pip); line.Add(pip); }              // little brother trails at the back
+            var pr = new Parade { Leader = lead, Line = line, Timer = 550 + rnd.Next(250) };
+            parade = pr;
+            if (Available(lead)) { lead.Job = pr; lead.State = WALK; lead.Tick = 0; }
+            else
+            {   // Ziggy comes down to the floor first
+                var wa = WorkAreaAt(lead.X);
+                SendTo(lead, pr, Clamp(lead.X, wa.Left + 60, wa.Right - 60), lead.Dir, WALK);
+            }
+            Say(lead, BubbleArt.Bang, 60);
+            for (int i = 0; i < line.Count; i++)
+            {
+                var p = line[i];
+                if (Available(p)) { p.Job = pr; p.State = FOLLOW; p.Tick = 0; }
+                else SendTo(p, pr, lead.X - lead.Dir * 31 * (i + 1), lead.Dir, FOLLOW);
+                Say(p, BubbleArt.Note, 50);
+            }
+        }
+
+        void EndParade(bool finished)
+        {
+            var pr = parade;
+            if (pr == null) return;
+            parade = null;
+            var all = new List<Penguin>(pr.Line) { pr.Leader };
+            foreach (var p in all)
+            {
+                if (p.Job != pr) continue;
+                p.Job = null; p.Tick = 0; p.Cooldown = 60;
+                if (finished) { p.State = DANCE; p.Timer = 70; Say(p, BubbleArt.Note); }   // a little celebration
+                else { p.State = LOOK; p.Timer = 40; Puzzled(p); }                           // where did Ziggy go?
+            }
+        }
+
+        void UpdateParade()
+        {
+            var pr = parade;
+            if (pr == null) return;
+            var ls = pr.Leader.State;
+            if (pr.Leader.Job != pr || (ls != WALK && ls != GOTO && ls != SUMMON)) { EndParade(false); return; }   // leader got picked up / fell
+            pr.Line.RemoveAll(q => q.Job != pr);                                                // stragglers drop out
+            if (pr.Line.Count == 0) { EndParade(false); return; }
+            if (ls == WALK && --pr.Timer <= 0) EndParade(true);
         }
 
         void StartSnowman()
         {
-            if (snow != null || tug != null || ticks < shooUntil) return;
-            var crew = PickGroup(3);
+            if (GroupBusy() || ticks < shooUntil) return;
+            var crew = PickGroup(6);
             if (crew == null) return;
             var wa = WorkAreaAt(crew[0].X);
-            float site = Math.Max(wa.Left + 80, Math.Min(wa.Right - 80, crew[0].X));
+            float site = Math.Max(wa.Left + 100, Math.Min(wa.Right - 100, crew[0].X));
             var s = new Snowman { X = site, Crew = crew };
             s.Win = new SpriteWindow(SnowArt.W, SnowArt.H);
             s.Win.MouseDown += delegate(object o, MouseEventArgs e)
@@ -1789,9 +2551,11 @@ namespace DesktopPenguins
             };
             s.Win.Show();
             snow = s;
-            float[] spots = { -24, 24, -46 };
             for (int i = 0; i < crew.Count; i++)
-                SendTo(crew[i], s, site + spots[i], spots[i] < 0 ? 1 : -1, BUILD);
+            {   // alternate sides, further out each pair
+                float off = (i % 2 == 0 ? -1 : 1) * (29 + (i / 2) * 26);
+                SendTo(crew[i], s, site + off, off < 0 ? 1 : -1, BUILD);
+            }
         }
 
         void StartMelt(Snowman s)
@@ -1858,18 +2622,18 @@ namespace DesktopPenguins
 
         void StartTug()
         {
-            if (snow != null || tug != null || ticks < shooUntil) return;
-            var group = PickGroup(4);
+            if (GroupBusy() || ticks < shooUntil) return;
+            var group = PickGroup(8);
             if (group == null) return;
             var wa = WorkAreaAt(group[0].X);
-            float c = Math.Max(wa.Left + 140, Math.Min(wa.Right - 140, group[0].X));
+            float c = Math.Max(wa.Left + 160, Math.Min(wa.Right - 160, group[0].X));
             var t = new Tug { C = c, C0 = c, Timer = 900 };
             for (int i = 0; i < group.Count; i++)
             {
                 var team = i % 2 == 0 ? t.Left : t.Right;
                 int side = team == t.Left ? -1 : 1;
                 var p = group[i];
-                p.TugOff = side * (28 + team.Count * 24);
+                p.TugOff = side * (34 + team.Count * 29);
                 team.Add(p);
                 SendTo(p, t, c + p.TugOff, -side, READY);
             }
@@ -1941,7 +2705,7 @@ namespace DesktopPenguins
                 int f = FloorAt((int)p.X);
                 if (f != int.MinValue) p.Y = f;
             }
-            t.Rope.Draw(screenDC, memDC, t.RopeBmp, (int)(t.C + t.RopeOff), (int)all[0].Y - 21);
+            t.Rope.Draw(screenDC, memDC, t.RopeBmp, (int)(t.C + t.RopeOff), (int)all[0].Y - 25);
 
             if (t.C - t.C0 > 45) EndTug(t.Right);
             else if (t.C - t.C0 < -45) EndTug(t.Left);
@@ -2094,6 +2858,7 @@ namespace DesktopPenguins
         void SetHidden(bool hide)
         {
             hiddenFs = hide;
+            if (hide) { EndFight(null); EndTower(false); EndParty(); }   // pause = game over
             int cmd = hide ? 0 /*SW_HIDE*/ : 4 /*SW_SHOWNOACTIVATE*/;
             foreach (var p in penguins)
             {
@@ -2134,7 +2899,7 @@ namespace DesktopPenguins
                 Detach(last);
                 if (last.Rider != null) { last.Rider.Base = null; last.Rider = null; }
                 ClosePenguinWindows(last);
-                unusedNames.Add(last.Name);
+                if (Array.IndexOf(CoreNames, last.Name) < 0) unusedNames.Add(last.Name);
             }
 
             TrackSurfaces();
@@ -2142,12 +2907,26 @@ namespace DesktopPenguins
             foreach (var p in penguins) Step(p);
             UpdateTug();
             UpdateSnowman();
+            UpdateParade();
+            UpdateFight();
+            UpdateTower();
+            UpdateParty();
             CheckBumps();
 
+            // about once a minute, Ziggy rounds everyone up for a parade
+            if (!GroupBusy() && ticks % 200 == 100 && rnd.Next(10) == 0) StartParade();
+
             // every couple of minutes, on average, a group activity starts by itself
-            if (snow == null && tug == null && ticks % 200 == 0 && rnd.Next(20) == 0)
+            if (!GroupBusy() && ticks % 200 == 0 && rnd.Next(14) == 0)
             {
-                if (rnd.Next(2) == 0) StartSnowman(); else StartTug();
+                switch (rnd.Next(5))
+                {
+                    case 0: StartSnowman(); break;
+                    case 1: StartTug(); break;
+                    case 2: StartFight(); break;
+                    case 3: StartTower(); break;
+                    default: StartParty(); break;
+                }
             }
 
             bool raise = ticks % 60 == 0;
@@ -2161,11 +2940,11 @@ namespace DesktopPenguins
                 int key = f * 2 + d;
                 if (key != p.LastFrame || x != p.LastX || y != p.LastY)
                 {
-                    p.Win.Draw(screenDC, memDC, hbm[d, f], x, y);
+                    p.Win.Draw(screenDC, memDC, hbm[p.Me.Accessory, d, f], x, y);
                     p.LastFrame = key; p.LastX = x; p.LastY = y;
                 }
                 if (raise) Native.SetWindowPos(p.Win.Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0013); // stay topmost
-                DrawExtras(p, (int)p.X, (int)(p.Y + p.HopOff) - Art.HeadH);
+                DrawExtras(p, (int)p.X, (int)(p.Y + p.HopOff) - HeadOf(p));
                 if (raise)
                 {
                     if (p.BubbleWin != null) Native.SetWindowPos(p.BubbleWin.Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0013);
@@ -2182,7 +2961,9 @@ namespace DesktopPenguins
             const int Z = 3, pad = 6;
             var frames = Art.RenderAll();
             int cw = Art.W * Z + pad, ch = Art.H * Z + pad;
-            using (var sheet = new Bitmap(cw * Art.Frames, ch * 3 + Art.H + 20))
+            int[] outfitFrames = { Art.Stand, Art.WalkA, Art.WaveA, Art.PetB, Art.SleepA, Art.Slide, Art.Umbrella };
+            int oy = ch * 3 + Art.H + 20;    // outfit rows start here
+            using (var sheet = new Bitmap(cw * Art.Frames, oy + ch * (Art.Outfits - 1)))
             using (var g = Graphics.FromImage(sheet))
             {
                 g.Clear(Color.FromArgb(70, 110, 160));
@@ -2204,8 +2985,12 @@ namespace DesktopPenguins
                 for (int i = 0; i < BubbleArt.Count; i++)
                     using (var b = BubbleArt.Render(i))
                         g.DrawImage(b, bxs + i * (BubbleArt.W * Z + 12), sy + 20, BubbleArt.W * Z, BubbleArt.H * Z);
-                using (var tag = BubbleArt.RenderTag("Waddles"))
+                using (var tag = BubbleArt.RenderTag("Ziggy", true))
                     g.DrawImage(tag, bxs + BubbleArt.Count * (BubbleArt.W * Z + 12) + 10, sy + 30, tag.Width * Z, tag.Height * Z);
+                for (int o = 1; o < Art.Outfits; o++)          // each accessory on a few poses
+                    for (int i = 0; i < outfitFrames.Length; i++)
+                        using (var b = Art.Render(outfitFrames[i], o))
+                            g.DrawImage(b, i * cw + pad / 2, oy + (o - 1) * ch + pad / 2, Art.W * Z, Art.H * Z);
                 sheet.Save(path, ImageFormat.Png);
             }
         }
@@ -2220,11 +3005,11 @@ namespace DesktopPenguins
             if (!created) return;
 
             Native.SetProcessDPIAware();
-            int n = 5;
-            if (args.Length > 0) int.TryParse(args[0], out n);
+            int n = PenguinApp.MinPenguins;
+            if (args.Length > 0 && !int.TryParse(args[0], out n)) n = PenguinApp.MinPenguins;
 
             Application.EnableVisualStyles();
-            Application.Run(new PenguinApp(Math.Max(0, Math.Min(n, 60))));
+            Application.Run(new PenguinApp(Math.Max(PenguinApp.MinPenguins, Math.Min(n, 60))));
             GC.KeepAlive(mutex);
         }
     }
