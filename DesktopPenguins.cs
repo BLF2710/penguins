@@ -77,6 +77,8 @@ namespace DesktopPenguins
             public RECT rcCaret;
         }
         [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint threadId, ref GUITHREADINFO info);
+        [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int cmd);
+        [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int state);
     }
 
     // ---------------------------------------------------------------- artwork
@@ -552,6 +554,121 @@ namespace DesktopPenguins
         }
     }
 
+    // Little speech bubbles with an icon, and name tags.
+    static class BubbleArt
+    {
+        public const int W = 24, H = 22;
+        public const int Heart = 0, Bang = 1, Question = 2, Note = 3, Zzz = 4, Count = 5;
+        const int SS = 4;
+
+        public static Bitmap Render(int icon)
+        {
+            using (var big = new Bitmap(W * SS, H * SS, PixelFormat.Format32bppPArgb))
+            {
+                using (var g = Graphics.FromImage(big))
+                {
+                    g.Clear(Color.Transparent);
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+                    g.ScaleTransform(SS, SS);
+
+                    // bubble with a little tail pointing down-left toward the penguin
+                    using (var path = RoundRect(new RectangleF(1, 1, 22, 15.5f), 6))
+                    {
+                        path.AddPolygon(new[] { new PointF(5, 15), new PointF(10, 15), new PointF(3.5f, 21) });
+                        path.FillMode = FillMode.Winding;
+                        using (var fill = new SolidBrush(Color.FromArgb(252, 252, 255))) g.FillPath(fill, path);
+                        using (var edge = new Pen(Color.FromArgb(120, 125, 140), 0.9f)) g.DrawPath(edge, path);
+                    }
+                    using (var cover = new SolidBrush(Color.FromArgb(252, 252, 255)))
+                        g.FillRectangle(cover, 5.4f, 14.2f, 4.2f, 1.6f);            // hide the seam under the tail
+
+                    switch (icon)
+                    {
+                        case Heart:
+                            using (var b = new SolidBrush(Color.FromArgb(232, 60, 85)))
+                            {
+                                g.FillEllipse(b, 7.2f, 4, 5.4f, 5.4f);
+                                g.FillEllipse(b, 11.4f, 4, 5.4f, 5.4f);
+                                g.FillPolygon(b, new[] { new PointF(7.4f, 7.6f), new PointF(16.6f, 7.6f), new PointF(12, 13.2f) });
+                            }
+                            break;
+                        case Note:
+                            using (var b = new SolidBrush(Color.FromArgb(120, 70, 200)))
+                            using (var p = new Pen(Color.FromArgb(120, 70, 200), 1.3f))
+                            {
+                                g.FillEllipse(b, 7.5f, 9.5f, 4.6f, 3.6f);
+                                g.FillEllipse(b, 13f, 8.3f, 4.6f, 3.6f);
+                                g.DrawLine(p, 11.6f, 11, 11.6f, 3.8f);
+                                g.DrawLine(p, 17.1f, 9.8f, 17.1f, 2.6f);
+                                g.FillPolygon(b, new[] { new PointF(11, 3.2f), new PointF(17.7f, 2f), new PointF(17.7f, 4.2f), new PointF(11, 5.4f) });
+                            }
+                            break;
+                        default:
+                            string text = icon == Bang ? "!" : icon == Question ? "?" : "zzz";
+                            Color col = icon == Bang ? Color.FromArgb(225, 90, 20)
+                                      : icon == Question ? Color.FromArgb(40, 110, 210) : Color.FromArgb(70, 120, 190);
+                            float size = icon == Zzz ? 8f : 11f;
+                            using (var f = new Font("Segoe UI", size, FontStyle.Bold, GraphicsUnit.Pixel))
+                            using (var b = new SolidBrush(col))
+                            using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                                g.DrawString(text, f, b, new RectangleF(1, 1, 22, 15.5f), sf);
+                            break;
+                    }
+                }
+                var small = new Bitmap(W, H, PixelFormat.Format32bppPArgb);
+                using (var g = Graphics.FromImage(small))
+                {
+                    g.Clear(Color.Transparent);
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.DrawImage(big, new Rectangle(0, 0, W, H));
+                }
+                return small;
+            }
+        }
+
+        // A dark rounded tag with the penguin's name in white.
+        public static Bitmap RenderTag(string name)
+        {
+            using (var f = new Font("Segoe UI", 12f, FontStyle.Bold, GraphicsUnit.Pixel))
+            {
+                SizeF sz;
+                using (var tmp = new Bitmap(1, 1)) using (var mg = Graphics.FromImage(tmp)) sz = mg.MeasureString(name, f);
+                int w = (int)Math.Ceiling(sz.Width) + 10, h = 18;
+                var b = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
+                using (var g = Graphics.FromImage(b))
+                {
+                    g.Clear(Color.Transparent);
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                    using (var path = RoundRect(new RectangleF(0.5f, 0.5f, w - 1, h - 1), 8))
+                    using (var bg = new SolidBrush(Color.FromArgb(225, 28, 32, 44)))
+                    using (var edge = new Pen(Color.FromArgb(200, 255, 255, 255), 1f))
+                    {
+                        g.FillPath(bg, path);
+                        g.DrawPath(edge, path);
+                    }
+                    using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                        g.DrawString(name, f, Brushes.White, new RectangleF(0, 0, w, h + 1), sf);
+                }
+                return b;
+            }
+        }
+
+        static GraphicsPath RoundRect(RectangleF r, float rad)
+        {
+            var p = new GraphicsPath();
+            float d = rad * 2;
+            p.AddArc(r.Left, r.Top, d, d, 180, 90);
+            p.AddArc(r.Right - d, r.Top, d, d, 270, 90);
+            p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            p.AddArc(r.Left, r.Bottom - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
+        }
+    }
+
     // ---------------------------------------------------------------- windows
 
     // One penguin's window: layered, per-pixel alpha. Clicks on fully transparent
@@ -559,12 +676,13 @@ namespace DesktopPenguins
     class SpriteWindow : Form
     {
         readonly int wd, ht;
+        readonly bool through;     // fully click-through (bubbles, name tags)
 
         public SpriteWindow() : this(Art.W, Art.H) { }
 
-        public SpriteWindow(int w, int h)
+        public SpriteWindow(int w, int h, bool clickThrough = false)
         {
-            wd = w; ht = h;
+            wd = w; ht = h; through = clickThrough;
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
@@ -579,6 +697,7 @@ namespace DesktopPenguins
             {
                 var cp = base.CreateParams;
                 cp.ExStyle |= 0x80000 /*LAYERED*/ | 0x80 /*TOOLWINDOW*/ | 0x08000000 /*NOACTIVATE*/ | 0x8 /*TOPMOST*/;
+                if (through) cp.ExStyle |= 0x20 /*TRANSPARENT*/;
                 return cp;
             }
         }
@@ -634,6 +753,18 @@ namespace DesktopPenguins
         public int FaceDir, NextState, WatchX;
         public int TypeFrame, ShakeTimer;     // typing along with you
         public int NearTicks;                 // how long the cursor has hovered close by
+        // speech bubble
+        public int Bubble = -1, BubbleTimer, QCool;
+        public SpriteWindow BubbleWin;
+        public int BubbleKey = -1, BubbleX, BubbleY;
+        // name tag
+        public string Name;
+        public bool Hovered;
+        public int HoverLinger;
+        public SpriteWindow TagWin;
+        public IntPtr TagBmp;
+        public int TagW, TagX = int.MinValue, TagY;
+        public bool TagShown, BubbleShown;
         public SpriteWindow Win;
         public int LastFrame = -1, LastX = int.MinValue, LastY = int.MinValue;
     }
@@ -691,6 +822,16 @@ namespace DesktopPenguins
         Rectangle[] screenBounds, workAreas;
         int target, ticks, shooUntil;
 
+        // speech bubbles, names, fullscreen
+        readonly IntPtr[] bubbleHbm = new IntPtr[BubbleArt.Count];
+        static readonly string[] NamePool = {
+            "Pebble", "Waddles", "Biscuit", "Nugget", "Pip", "Sprout", "Mochi", "Dumpling", "Puddle", "Flurry",
+            "Noodle", "Bean", "Socks", "Tofu", "Marble", "Button", "Crumble", "Snowy", "Pickle", "Fizz",
+            "Toast", "Bramble", "Clover", "Ziggy", "Juniper", "Maple", "Sushi", "Pudding", "Tumble", "Wobble",
+            "Frosty", "Peanut", "Olive", "Mittens", "Skipper", "Bubbles", "Cocoa", "Hazel", "Sleet", "Gizmo" };
+        readonly List<string> unusedNames = new List<string>(NamePool);
+        bool hiddenFs;
+
         // snowman & tug of war
         readonly IntPtr[] snowHbm = new IntPtr[SnowArt.Stages];
         Snowman snow;
@@ -716,6 +857,8 @@ namespace DesktopPenguins
                     hbm[d, f] = Art.ToHBitmap(frames[d, f]);
             for (int s = 0; s < SnowArt.Stages; s++)
                 using (var b = SnowArt.Render(s)) snowHbm[s] = Art.ToHBitmap(b);
+            for (int i = 0; i < BubbleArt.Count; i++)
+                using (var b = BubbleArt.Render(i)) bubbleHbm[i] = Art.ToHBitmap(b);
             screenDC = Native.GetDC(IntPtr.Zero);
             memDC = Native.CreateCompatibleDC(screenDC);
 
@@ -765,7 +908,7 @@ namespace DesktopPenguins
             Native.UnregisterHotKey(hotkey.Handle, 1);
             hotkey.DestroyHandle();
             tray.Visible = false;
-            foreach (var p in penguins) p.Win.Close();
+            foreach (var p in penguins) ClosePenguinWindows(p);
             if (snow != null) snow.Win.Close();
             if (tug != null && tug.Rope != null) tug.Rope.Close();
             ExitThread();
@@ -999,12 +1142,88 @@ namespace DesktopPenguins
         {
             var p = new Penguin();
             Reset(p);
+            if (unusedNames.Count == 0) unusedNames.AddRange(NamePool);
+            int ni = rnd.Next(unusedNames.Count);
+            p.Name = unusedNames[ni];
+            unusedNames.RemoveAt(ni);
             p.Win = new SpriteWindow();
             p.Win.MouseDown += delegate(object s, MouseEventArgs e) { Grab(p, e); };
             p.Win.MouseUp += delegate { Release(p); };
             p.Win.MouseCaptureChanged += delegate { if (!p.Win.Capture) Release(p); };
+            p.Win.MouseEnter += delegate { p.Hovered = true; };
+            p.Win.MouseLeave += delegate { p.Hovered = false; p.HoverLinger = 35; };
             p.Win.Show();
+            if (hiddenFs) Native.ShowWindow(p.Win.Handle, 0);
             penguins.Add(p);
+        }
+
+        void ClosePenguinWindows(Penguin p)
+        {
+            p.Win.Close();
+            if (p.BubbleWin != null) p.BubbleWin.Close();
+            if (p.TagWin != null) p.TagWin.Close();
+            if (p.TagBmp != IntPtr.Zero) { Native.DeleteObject(p.TagBmp); p.TagBmp = IntPtr.Zero; }
+        }
+
+        // ---------- speech bubbles ----------
+
+        void Say(Penguin p, int icon, int duration = 60)
+        {
+            p.Bubble = icon; p.BubbleTimer = duration;
+        }
+
+        // "?" — with a cooldown so a confused penguin doesn't spam it
+        void Puzzled(Penguin p)
+        {
+            if (p.QCool > 0) return;
+            p.QCool = 240;
+            Say(p, BubbleArt.Question, 50);
+        }
+
+        // Bubble above-right of the head; name tag centred above the head.
+        void DrawExtras(Penguin p, int headX, int headTop)
+        {
+            bool off = p.State == OFF;
+
+            bool showTag = !off && (p.Hovered || p.State == HELD || p.HoverLinger > 0);
+            if (p.HoverLinger > 0 && !p.Hovered) p.HoverLinger--;
+            if (showTag)
+            {
+                if (p.TagWin == null)
+                {
+                    using (var b = BubbleArt.RenderTag(p.Name)) { p.TagBmp = Art.ToHBitmap(b); p.TagW = b.Width; }
+                    p.TagWin = new SpriteWindow(p.TagW, 18, true);
+                    p.TagWin.Show();
+                }
+                int tx = headX - p.TagW / 2, ty = headTop - 22;
+                if (!p.TagShown || tx != p.TagX || ty != p.TagY)
+                {
+                    p.TagWin.Draw(screenDC, memDC, p.TagBmp, tx, ty);
+                    p.TagX = tx; p.TagY = ty; p.TagShown = true;
+                }
+            }
+            else if (p.TagShown)
+            {
+                p.TagWin.Draw(screenDC, memDC, p.TagBmp, -32000, -32000);
+                p.TagShown = false;
+            }
+
+            if (p.BubbleTimer > 0 && !off)
+            {
+                p.BubbleTimer--;
+                if (p.BubbleWin == null) { p.BubbleWin = new SpriteWindow(BubbleArt.W, BubbleArt.H, true); p.BubbleWin.Show(); }
+                int bx = headX + 6, by = headTop - BubbleArt.H - (showTag ? 20 : 2);
+                if (!p.BubbleShown || p.Bubble != p.BubbleKey || bx != p.BubbleX || by != p.BubbleY)
+                {
+                    p.BubbleWin.Draw(screenDC, memDC, bubbleHbm[p.Bubble], bx, by);
+                    p.BubbleKey = p.Bubble; p.BubbleX = bx; p.BubbleY = by; p.BubbleShown = true;
+                }
+            }
+            else if (p.BubbleShown)
+            {
+                p.BubbleWin.Draw(screenDC, memDC, bubbleHbm[p.BubbleKey], -32000, -32000);
+                p.BubbleShown = false; p.BubbleTimer = 0;
+            }
         }
 
         void Reset(Penguin p)
@@ -1040,6 +1259,7 @@ namespace DesktopPenguins
             p.Vx = Math.Max(-25f, Math.Min(25f, dx * 1.5f)) + (float)(rnd.NextDouble() * 6 - 3);
             p.Vy = -5f - (float)rnd.NextDouble() * 4f + Math.Min(0, dy);
             p.Spin = true; p.AfterLand = FACEPLANT;
+            Say(p, BubbleArt.Bang, 50);                 // shaken off a window: "!"
         }
 
         void Shoo()
@@ -1075,6 +1295,7 @@ namespace DesktopPenguins
             p.GrabDy = c.Y - (p.Y + p.HopOff);
             p.Down = c; p.Moved = false;
             p.State = HELD; p.Tick = 0;
+            Say(p, BubbleArt.Bang, 45);                 // "!"
             p.Vx = p.Vy = 0; p.HopOff = p.HopV = 0;
             p.Umbrella = false; p.OnFloor = false; p.Surf = IntPtr.Zero;
         }
@@ -1134,13 +1355,16 @@ namespace DesktopPenguins
         void StartBehaviour(Penguin p)
         {
             p.Tick = 0;
-            if (idleMs > 90000 && rnd.Next(2) == 0) { p.State = SLEEP; p.Timer = 300 + rnd.Next(300); return; }   // long idle: naps
+            if (idleMs > 90000 && rnd.Next(2) == 0)
+            {   // long idle: naps
+                p.State = SLEEP; p.Timer = 300 + rnd.Next(300); Say(p, BubbleArt.Zzz, 70); return;
+            }
             int r = rnd.Next(100);
             if (r < 20)      { p.State = LOOK;  p.Timer = 70 + rnd.Next(60); }
             else if (r < 35) { p.State = WAVE;  p.Timer = 50 + rnd.Next(40); }
-            else if (r < 47) { p.State = SLEEP; p.Timer = 160 + rnd.Next(200); }
+            else if (r < 47) { p.State = SLEEP; p.Timer = 160 + rnd.Next(200); Say(p, BubbleArt.Zzz, 70); }
             else if (r < 65) { p.State = SLIDE; p.SlideV = 5f + (float)rnd.NextDouble() * 2f; }
-            else if (r < 77) { p.State = DANCE; p.Timer = 80 + rnd.Next(60); }
+            else if (r < 77) { p.State = DANCE; p.Timer = 80 + rnd.Next(60); Say(p, BubbleArt.Note); }
             else if (r < 93) { p.HopV = -3.4f; }                                  // hop while walking
             else             { p.State = FLY; p.OnFloor = false; p.Surf = IntPtr.Zero; p.FlyBaseY = p.Y; }
         }
@@ -1161,7 +1385,7 @@ namespace DesktopPenguins
                 if (Covered(i, edge + p.Dir * 2, y - 15)) continue;           // that side isn't visible here
                 if (!Standable(i, edge + p.Dir * 14, r.Top)) continue;        // nowhere to stand at the top
                 p.ClimbCool = 150;
-                if (rnd.Next(100) >= 65) return false;                        // walk past it this time
+                if (rnd.Next(100) >= 65) { Puzzled(p); return false; }        // bumped into it: "?" and walk past
                 p.State = CLIMB; p.Tick = 0; p.OnFloor = false; p.Surf = wins[i].H;
                 p.X = edge - p.Dir * 9;
                 EnsureTrack(p.Surf);
@@ -1176,12 +1400,12 @@ namespace DesktopPenguins
             int y = (int)p.Y;
             float nx = p.X + p.Dir * speed;
             int ix = (int)nx;
-            if (ix < virt.Left + 20 || ix >= virt.Right - 20) { p.Dir = -p.Dir; return; }
+            if (ix < virt.Left + 20 || ix >= virt.Right - 20) { p.Dir = -p.Dir; Puzzled(p); return; }   // screen edge
             if (p.State == WALK && TryClimb(p, nx)) return;
             if (p.OnFloor)
             {
                 int f = FloorAt(ix);
-                if (f == int.MinValue || f < y) { p.Dir = -p.Dir; return; }  // gap or wall: turn
+                if (f == int.MinValue || f < y) { p.Dir = -p.Dir; Puzzled(p); return; }  // gap or wall: "?" and turn
                 p.X = nx;
                 if (f > y) StartFalling(p, false);
             }
@@ -1199,6 +1423,7 @@ namespace DesktopPenguins
         {
             int x = (int)p.X, y = (int)p.Y;
             p.Tick++;
+            if (p.QCool > 0) p.QCool--;
             if (p.BumpCool > 0) p.BumpCool--;
             if (p.ClimbCool > 0) p.ClimbCool--;
 
@@ -1320,13 +1545,13 @@ namespace DesktopPenguins
                     if (--p.Timer <= 0) { p.State = WALK; p.Tick = 0; }
                     return;
                 case ADMIRE:       // step back and admire the snowman, then celebrate
-                    if (--p.Timer <= 0) { p.State = DANCE; p.Timer = 70; p.Tick = 0; }
+                    if (--p.Timer <= 0) { p.State = DANCE; p.Timer = 70; p.Tick = 0; Say(p, BubbleArt.Note); }
                     return;
                 case YAWN:
                     if (--p.Timer <= 0)
                     {
                         p.Tick = 0;
-                        if (rnd.Next(100) < 40) { p.State = SLEEP; p.Timer = 200 + rnd.Next(250); }
+                        if (rnd.Next(100) < 40) { p.State = SLEEP; p.Timer = 200 + rnd.Next(250); Say(p, BubbleArt.Zzz, 70); }
                         else p.State = WALK;
                     }
                     return;
@@ -1412,6 +1637,7 @@ namespace DesktopPenguins
                 if (idleMs > 30000 && rnd.Next(500) == 0)
                 {   // you've been away a while: yawn
                     p.State = YAWN; p.Timer = 55; p.Tick = 0;
+                    Say(p, BubbleArt.Zzz, 55);
                     return;
                 }
                 if (rnd.Next(follow ? 900 : 240) == 0) { StartBehaviour(p); return; }
@@ -1440,6 +1666,7 @@ namespace DesktopPenguins
                     {
                         var other = p == a ? b : a;
                         p.State = GREET; p.Tick = 0; p.Timer = 45 + rnd.Next(15);
+                        Say(p, BubbleArt.Heart, 55);
                         p.Dir = other.X >= p.X ? 1 : -1;                          // face each other
                         p.NextSlide = together;
                         p.NextDir = together ? slideDir : -p.Dir;                // ...then turn away
@@ -1607,7 +1834,7 @@ namespace DesktopPenguins
                         if (s.Stage == 4)
                         {   // finished!  step back and admire it
                             foreach (var p in s.Crew)
-                                if (p.Job == s) { p.Job = null; p.State = ADMIRE; p.Timer = 70; p.Tick = 0; }
+                                if (p.Job == s) { p.Job = null; p.State = ADMIRE; p.Timer = 70; p.Tick = 0; Say(p, BubbleArt.Heart, 65); }
                             s.Life = 6000;   // about 3 minutes
                         }
                     }
@@ -1660,11 +1887,12 @@ namespace DesktopPenguins
                 if (p.Job != t) continue;
                 p.Job = null; p.Tick = 0;
                 if (winners == null) { p.State = LOOK; p.Timer = 40; }
-                else if (winners.Contains(p)) { p.State = DANCE; p.Timer = 90; }
+                else if (winners.Contains(p)) { p.State = DANCE; p.Timer = 90; Say(p, BubbleArt.Note); }
                 else
                 {   // pulled over: belly-flop toward the winners
                     p.Dir = winners == t.Right ? 1 : -1;
                     p.State = SLIDE; p.SlideV = 3.5f;
+                    Say(p, BubbleArt.Bang, 50);
                 }
             }
             tug = null;
@@ -1821,7 +2049,11 @@ namespace DesktopPenguins
                     bool free = (p.State == WALK && p.HopOff == 0) || p.State == LOOK || p.State == CURIOUS
                              || p.State == WATCH || p.State == WAVE || p.State == SWAY;
                     if (!free || p.Job != null) continue;
-                    if (Math.Abs(p.X - cur.X) < 300 && p.Y > cur.Y) { p.State = SWAY; p.Timer = 25; }
+                    if (Math.Abs(p.X - cur.X) < 300 && p.Y > cur.Y)
+                    {
+                        if (p.State != SWAY) Say(p, BubbleArt.Note, 50);
+                        p.State = SWAY; p.Timer = 25;
+                    }
                 }
             }
         }
@@ -1837,9 +2069,62 @@ namespace DesktopPenguins
             }
         }
 
+        // ---------- fullscreen ----------
+
+        // Is a game, video or slideshow running fullscreen?
+        bool FullscreenActive()
+        {
+            int st;   // Windows' own signal: 2 busy (fullscreen app), 3 D3D fullscreen, 4 presentation mode
+            if (Native.SHQueryUserNotificationState(out st) == 0 && st >= 2 && st <= 4) return true;
+
+            var fg = Native.GetForegroundWindow();
+            if (fg == IntPtr.Zero) return false;
+            var sb = new StringBuilder(64);
+            Native.GetClassName(fg, sb, 64);
+            string cls = sb.ToString();
+            if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd") return false;
+            int style = Native.GetWindowLong(fg, -16);
+            if ((style & 0x00C00000) == 0x00C00000) return false;      // has a title bar: an ordinary (maybe maximized) window
+            Native.RECT r;
+            if (!Native.GetWindowRect(fg, out r)) return false;
+            var b = Screen.FromHandle(fg).Bounds;                      // borderless and covering the whole monitor
+            return r.Left <= b.Left && r.Top <= b.Top && r.Right >= b.Right && r.Bottom >= b.Bottom;
+        }
+
+        void SetHidden(bool hide)
+        {
+            hiddenFs = hide;
+            int cmd = hide ? 0 /*SW_HIDE*/ : 4 /*SW_SHOWNOACTIVATE*/;
+            foreach (var p in penguins)
+            {
+                Native.ShowWindow(p.Win.Handle, cmd);
+                if (p.BubbleWin != null)
+                {
+                    Native.ShowWindow(p.BubbleWin.Handle, cmd);
+                    if (!hide) p.BubbleWin.Draw(screenDC, memDC, bubbleHbm[Math.Max(0, p.BubbleKey)], -32000, -32000);
+                }
+                if (p.TagWin != null)
+                {
+                    Native.ShowWindow(p.TagWin.Handle, cmd);
+                    if (!hide) p.TagWin.Draw(screenDC, memDC, p.TagBmp, -32000, -32000);
+                }
+                p.LastFrame = -1; p.BubbleShown = false; p.TagShown = false; p.Hovered = false;   // redraw when back
+                p.BubbleTimer = 0; p.HoverLinger = 0;
+                if (hide && p.State == HELD) { p.Win.Capture = false; Release(p); }
+            }
+            if (snow != null) { Native.ShowWindow(snow.Win.Handle, cmd); snow.LastKey = -1; }
+            if (tug != null && tug.Rope != null) Native.ShowWindow(tug.Rope.Handle, cmd);
+        }
+
         void OnTick(object sender, EventArgs e)
         {
             ticks++;
+            if (ticks % 10 == 0)
+            {
+                bool fs = FullscreenActive();
+                if (fs != hiddenFs) SetHidden(fs);
+            }
+            if (hiddenFs) return;      // paused while something is fullscreen
             if (ticks % 6 == 1) RefreshWindows();
             if (penguins.Count < target && ticks % 25 == 1 && ticks >= shooUntil) Spawn();
             while (penguins.Count > target)
@@ -1848,7 +2133,8 @@ namespace DesktopPenguins
                 penguins.RemoveAt(penguins.Count - 1);
                 Detach(last);
                 if (last.Rider != null) { last.Rider.Base = null; last.Rider = null; }
-                last.Win.Close();
+                ClosePenguinWindows(last);
+                unusedNames.Add(last.Name);
             }
 
             TrackSurfaces();
@@ -1879,6 +2165,12 @@ namespace DesktopPenguins
                     p.LastFrame = key; p.LastX = x; p.LastY = y;
                 }
                 if (raise) Native.SetWindowPos(p.Win.Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0013); // stay topmost
+                DrawExtras(p, (int)p.X, (int)(p.Y + p.HopOff) - Art.HeadH);
+                if (raise)
+                {
+                    if (p.BubbleWin != null) Native.SetWindowPos(p.BubbleWin.Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0013);
+                    if (p.TagWin != null) Native.SetWindowPos(p.TagWin.Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0013);
+                }
             }
         }
     }
@@ -1908,6 +2200,12 @@ namespace DesktopPenguins
                         g.DrawImage(b, s * cw + pad / 2, sy, SnowArt.W * Z, SnowArt.H * Z);
                 using (var rope = SnowArt.RenderRope(60))
                     g.DrawImage(rope, SnowArt.Stages * cw + 20, sy + 60, 60 * Z, 12 * Z);
+                int bxs = SnowArt.Stages * cw + 60 * Z + 60;
+                for (int i = 0; i < BubbleArt.Count; i++)
+                    using (var b = BubbleArt.Render(i))
+                        g.DrawImage(b, bxs + i * (BubbleArt.W * Z + 12), sy + 20, BubbleArt.W * Z, BubbleArt.H * Z);
+                using (var tag = BubbleArt.RenderTag("Waddles"))
+                    g.DrawImage(tag, bxs + BubbleArt.Count * (BubbleArt.W * Z + 12) + 10, sy + 30, tag.Width * Z, tag.Height * Z);
                 sheet.Save(path, ImageFormat.Png);
             }
         }
