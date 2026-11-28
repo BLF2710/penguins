@@ -245,8 +245,8 @@ namespace DesktopPenguins
                          FishA = 84, FishB = 85, FishTug = 86, FishSleep = 87, FishCatch = 88,
                          HugRunA = 89, HugRunB = 90, HugA = 91, HugB = 92, HugSqueeze = 93, HugSleep = 94,
                          ShiverA = 95, ShiverB = 96, SnugA = 97, SnugM = 98, SnugB = 99,
-                         KnitA = 100, KnitB = 101;
-        public const int Frames = 102;
+                         KnitA = 100, KnitB = 101, DrawA = 102, DrawB = 103;
+        public const int Frames = 104;
         public const float HoleX = 160;               // where the fishing line meets the ice (penguin-box units)
 
         // Accessories (one sprite set each): 0 = none.
@@ -389,6 +389,9 @@ namespace DesktopPenguins
                         // Juniper knitting: click, click...
                         case KnitA:      At(g); PenguinF(g, 12, 44, 0, 0, 0, 0, 3); Knitting(g, 0); break;
                         case KnitB:      At(g); PenguinF(g, 12, 50, 0, 0, 0, 0, 3); Knitting(g, 1); break;
+                        // Doodle sketching on her pad (secretly, mostly)
+                        case DrawA:      At(g); PenguinF(g, 12, 40, 0, 0, 0, 0, 0); Sketchpad(g, 0); break;
+                        case DrawB:      At(g); PenguinF(g, 12, 40, 0, 0, 0, 0, 0); Sketchpad(g, 1); break;
                         case JuggleB: At(g); PenguinF(g, 125, 155, -3, 0, 3, -4, 0); Fish(g, 58, -22, 170, 40); break;
                         case Umbrella:
                             At(g); UmbrellaShape(g, 104);
@@ -523,6 +526,31 @@ namespace DesktopPenguins
                 g.DrawLine(needle, 142 - o, 54, 106 + o, 80);
             }
             NearFlipper(g, k == 0 ? 52 : 46);
+        }
+
+        // A sketchpad held up in front, pencil scribbling away.
+        static void Sketchpad(Graphics g, int k)
+        {
+            var st = g.Save();
+            g.TranslateTransform(122, 66);
+            g.RotateTransform(-8);
+            var pad = new RectangleF(-15, -18, 30, 36);
+            using (var cover = new SolidBrush(Color.FromArgb(150, 85, 200))) g.FillRectangle(cover, pad.X - 2, pad.Y - 2, pad.Width + 4, pad.Height + 4);
+            using (var paper = new SolidBrush(Color.FromArgb(252, 250, 240))) g.FillRectangle(paper, pad);
+            using (var ink = new Pen(Color.FromArgb(70, 70, 90), 1.6f))
+            {   // a little doodle of a snowman
+                g.DrawEllipse(ink, -5, -12, 10, 10);
+                g.DrawEllipse(ink, -8, -3, 16, 15);
+                if (k == 1) g.DrawLine(ink, -11, 2, 11, -1);
+            }
+            g.Restore(st);
+            using (var pencil = new Pen(Color.FromArgb(245, 195, 50), 3f))
+            {
+                pencil.StartCap = pencil.EndCap = LineCap.Round;
+                float o = k == 0 ? 0 : 4;
+                g.DrawLine(pencil, 112 + o, 76 - o, 124 + o, 62 - o);
+            }
+            NearFlipper(g, 48);
         }
 
         // The Frostbites' family pin: a little snowflake badge.
@@ -1455,6 +1483,38 @@ namespace DesktopPenguins
             }
         }
 
+        public const int BlanketW = 180, BlanketH = 14;
+
+        // The truce picnic: a red-and-white checked blanket with a few fish laid out on it.
+        public static Bitmap RenderBlanket()
+        {
+            int w = BlanketW, h = BlanketH;
+            using (var big = new Bitmap(w * SS, h * SS, PixelFormat.Format32bppPArgb))
+            {
+                using (var g = Graphics.FromImage(big))
+                {
+                    g.Clear(Color.Transparent);
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.ScaleTransform(SS, SS);
+                    var cloth = new[] { new PointF(10, 2), new PointF(w - 10, 2), new PointF(w - 1, h - 2), new PointF(1, h - 2) };
+                    using (var white = new SolidBrush(Color.FromArgb(250, 246, 240))) g.FillPolygon(white, cloth);
+                    var st = g.Save();
+                    using (var clip = new GraphicsPath()) { clip.AddPolygon(cloth); g.SetClip(clip); }
+                    using (var red = new SolidBrush(Color.FromArgb(150, 220, 50, 60)))
+                    {
+                        for (float x = 0; x < w; x += 12) g.FillRectangle(red, x, 0, 6, h);
+                        for (float y = 2; y < h; y += 6) g.FillRectangle(red, 0, y, w, 3);
+                    }
+                    g.Restore(st);
+                    using (var edge = new Pen(Color.FromArgb(170, 40, 45), 1.2f)) g.DrawPolygon(edge, cloth);
+                    Art.Fish(g, w / 2f - 22, h / 2f, 10, 18);
+                    Art.Fish(g, w / 2f + 20, h / 2f, 170, 18);
+                    using (var mug = new SolidBrush(Color.FromArgb(245, 200, 90))) g.FillEllipse(mug, w / 2f - 4, 3, 8, 7);
+                }
+                return Downsample(big, w, h);
+            }
+        }
+
         // A fish flying through the air (thrown to someone at dinner).
         public static Bitmap RenderFish(bool right)
         {
@@ -1922,6 +1982,7 @@ namespace DesktopPenguins
         static readonly string[][] RivalPairs = {
             new[] { "Puddle", "Ziggy" },       // the two fast ones
             new[] { "Pebble", "Ziggy" },       // Ziggy keeps waking Pebble up
+            new[] { "Ziggy", "Bubbles" },      // the two leaders: the real feud between the families
         };
 
         static bool In(string[][] pairs, string a, string b)
@@ -1936,6 +1997,14 @@ namespace DesktopPenguins
             return list;
         }
 
+        // Across the fence: the two leaders are proper rivals (in RivalPairs); these are only pretending to be.
+        public static readonly string[][] SoftPairs = {
+            new[] { "Puddle", "Bolt" },        // the two speedsters: who's faster? (neither will admit they like it)
+            new[] { "Pebble", "Mochi" },       // she keeps pinching his snacks... and they keep ending up napping together
+            new[] { "Wobble", "Doodle" },      // she sneers at his work, then sketches it when he isn't looking
+            new[] { "Waddles", "Juniper" },    // the two sensible ones: secretly firm friends
+        };
+        public static bool SoftRivals(string a, string b) { return In(SoftPairs, a, b); }
         public static bool AreFriends(string a, string b) { return In(FriendPairs, a, b); }
         public static bool AreRivals(string a, string b) { return In(RivalPairs, a, b); }
         public static bool Admires(string fan, string star) { return fan == "Wobble" && star == "Puddle"; }
@@ -2093,6 +2162,7 @@ namespace DesktopPenguins
         public float HopFromX, HopFromY;      // tower: where the hop up started
         public Penguin HopOnto;               // tower: whose head it is hopping onto
         public float SummonY;                 // called to an activity: the floor it flies down to
+        public Penguin SummonOnto;            // ...or the window this penguin is standing on (Pip, to Pearl's balcony)
         public int RideFor;                   // piggyback: how long to ride once up (0 = until told to get down)
         public Penguin HelpedBy;              // Pip: the big sibling coming to help it up
         public Penguin Buddy;                 // walking together: the friend it keeps step with
@@ -2127,6 +2197,7 @@ namespace DesktopPenguins
         public bool FishNap;                  // nodded off over the rod
         public bool HugNap, Wobbly;           // group hug: fell asleep in it / losing balance in a squeeze
         public int Shiver;                    // family huddle: brrr, still cold
+        public int Pose;                      // at a meeting: what it's doing (see MeetFrame)
         public float X, Y, Vx, Vy, Speed;   // X = centre, Y = feet (screen coords)
         public int Dir = 1;                 // 1 right, -1 left
         public int State;
@@ -2174,6 +2245,7 @@ namespace DesktopPenguins
         public List<Penguin> Left = new List<Penguin>(), Right = new List<Penguin>();
         public float C, C0, V, SL = 1, SR = 1;
         public int Phase, Timer, BoostL, BoostR, RopeOff;
+        public bool Versus;                 // the family vs the Frostbites
         public SpriteWindow Rope;
         public IntPtr RopeBmp;
         public List<Penguin> All() { var a = new List<Penguin>(Left); a.AddRange(Right); return a; }
@@ -2195,6 +2267,7 @@ namespace DesktopPenguins
         public List<Penguin> Left = new List<Penguin>(), Right = new List<Penguin>();
         public List<Snowball> Balls = new List<Snowball>();
         public int Timer, HitsL, HitsR;
+        public bool Versus;
         public List<Penguin> All() { var a = new List<Penguin>(Left); a.AddRange(Right); return a; }
     }
 
@@ -2204,6 +2277,9 @@ namespace DesktopPenguins
         public List<Penguin> Crew;          // [0] is the base, the rest climb in order
         public float Site;
         public int Built, Phase, Timer;     // Built = penguins in the stack so far
+        public int Dir = 1;                 // which side the queue waits on (-1: to the right of the base)
+        public Tower Rival;                 // a tower race against the neighbours
+        public bool Won;
     }
 
     // Everyone dances in time; Ziggy DJs if he's there.
@@ -2212,6 +2288,7 @@ namespace DesktopPenguins
         public List<Penguin> Crew;
         public Penguin Dj;
         public int Timer;
+        public List<Penguin> Left, Right;   // a dance-off: the two families take turns
     }
 
     // Two rivals race to the edge of the screen; their friends cheer.
@@ -2291,6 +2368,20 @@ namespace DesktopPenguins
     }
 
     // A little heart floating up from a group hug.
+    // Two neighbours from either side meet up in the middle: Kind = which pair (see PenguinApp.MeetPairs).
+    class Meeting
+    {
+        public Penguin A, B;                  // A from the family, B a Frostbite
+        public int Kind, Spot, T, Wait;
+        public float X;
+        public bool Arrived, Nap;
+        public Penguin Catcher;               // a date: the parent who's spotted them
+        public int Caught;                    // ...and when they got there (0 = not yet)
+        public List<Penguin> Crew;            // the picnic: everyone
+        public SpriteWindow Blanket;
+        public int Floor;
+    }
+
     class Floaty
     {
         public SpriteWindow Win;
@@ -2328,7 +2419,8 @@ namespace DesktopPenguins
                   TEASE = 47, MAKEUP = 48, GG = 49, HUDDLE = 50, PHOTO = 51, BED = 52, TUCK = 53, BEDGUARD = 54, DINE = 55, COOK = 56, GROOVE = 57, MOVIE = 58, PEEK = 59, POSE = 60,
                   GOGGLE = 61, HATFIX = 62, SLEEPWALK = 63, LISTEN = 64, IDLE = 65,
                   PILLOW = 66, GRUMP = 67, SCARF = 68, VISIT = 69, REPAIR = 70, SHOWOFF = 71, CLAP = 72,
-                  ATTN = 74, INSPECT = 75, CHECKPIP = 76, SNEAK = 77, STARTLE = 78, HOLD = 79, ICEFISH = 80, FISHWATCH = 81;
+                  ATTN = 74, INSPECT = 75, CHECKPIP = 76, SNEAK = 77, STARTLE = 78, HOLD = 79, ICEFISH = 80, FISHWATCH = 81,
+                  MEET = 82;              // a get-together across the fence (driven by UpdateMeetings)
         const int W = Art.W, H = Art.H;
         const int ShooTicks = 2000;    // ~60 s
 
@@ -2363,6 +2455,21 @@ namespace DesktopPenguins
         public const int MinPenguins = 6;
         static readonly string[] RandomPool = Array.FindAll(NamePool, n => Array.IndexOf(CoreNames, n) < 0 && Array.IndexOf(FrostNames, n) < 0);
         bool frostOn = true;
+        int feud = 70, savedFeud = -1;               // between the families: 100 all-out feud ... 0 firm friends
+        readonly List<Meeting> meetings = new List<Meeting>();
+        readonly int[] meetCool = new int[10];
+        static readonly string[][] MeetPairs = {
+            new[] { "Ziggy", "Bubbles" }, new[] { "Puddle", "Bolt" }, new[] { "Pebble", "Mochi" },
+            new[] { "Wobble", "Doodle" }, new[] { "Waddles", "Juniper" },
+            new[] { "Pip", "Pearl" }, new[] { "Pip", "Pearl" }, new[] { "Pip", "Pearl" },
+            new[] { "Waddles", "Juniper" }, new[] { "Wobble", "Doodle" } };
+        const int Judge = 9;
+        const int LeadersMeet = 0, RaceMeet = 1, SnackMeet = 2, ArtMeet = 3, TeaMeet = 4,
+                  MeetCute = 5, DateMeet = 6, Balcony = 7, Picnic = 8;
+        // Pip and Pearl: have they met yet, and how many secret dates (and getting-caughts) since the last picnic
+        int romance, dates, savedRomance = -1, savedDates = -1;
+        IntPtr blanketHbm;
+        int judgeAt;                                    // a snowman's just been finished: Doodle will be over to "critique" it
         const string SettingsKey = @"Software\DesktopPenguins";
         readonly List<string> unusedNames = new List<string>(RandomPool);
         bool hiddenFs;
@@ -2373,7 +2480,7 @@ namespace DesktopPenguins
         Tug tug;
         Parade parade;
         Fight fight;
-        Tower tower;
+        readonly List<Tower> towers = new List<Tower>();
         Party party;
         Hug hug;
         Race race;
@@ -2432,6 +2539,9 @@ namespace DesktopPenguins
         {
             target = count;
             frostOn = LoadFrostOn();
+            feud = savedFeud = LoadFeud();
+            romance = savedRomance = LoadInt("Romance", 0);
+            dates = savedDates = LoadInt("Dates", 0);
             Bitmap[,] frames = null;
             for (int o = 0; o < Art.BaseOutfits; o++)
             {
@@ -2454,6 +2564,7 @@ namespace DesktopPenguins
                              : SnowArt.RenderHeart(FloatW, FloatH, i == 0 ? Color.FromArgb(240, 60, 90) : Color.FromArgb(255, 135, 170)))
                     floatHbm[i] = Art.ToHBitmap(b);
             using (var b = SnowArt.RenderBucket()) bucketHbm = Art.ToHBitmap(b);
+            using (var b = SnowArt.RenderBlanket()) blanketHbm = Art.ToHBitmap(b);
             for (int i = 0; i < BubbleArt.Count; i++)
                 using (var b = BubbleArt.Render(i)) bubbleHbm[i] = Art.ToHBitmap(b);
             screenDC = Native.GetDC(IntPtr.Zero);
@@ -2499,11 +2610,12 @@ namespace DesktopPenguins
             frostItem.CheckOnClick = true;
             frostItem.CheckedChanged += delegate { frostOn = frostItem.Checked; SaveFrostOn(frostOn); };
             menu.Items.Add(frostItem);
+            menu.Opening += delegate { frostItem.Text = "The Frostbites (neighbours): " + FeudWord(); };
             menu.Items.Add("Build a snowman", null, delegate { StartSnowman(); });
-            menu.Items.Add("Tug of war!", null, delegate { StartTug(); });
-            menu.Items.Add("Snowball fight!", null, delegate { StartFight(); });
-            menu.Items.Add("Penguin tower!", null, delegate { StartTower(); });
-            menu.Items.Add("Dance party!", null, delegate { StartParty(); });
+            menu.Items.Add("Tug of war!", null, delegate { StartTug(true); });
+            menu.Items.Add("Snowball fight!", null, delegate { StartFight(true); });
+            menu.Items.Add("Penguin tower!", null, delegate { StartTower(true); });
+            menu.Items.Add("Dance party!", null, delegate { StartParty(true); });
             menu.Items.Add("Follow Ziggy!", null, delegate { StartParade(); });
             menu.Items.Add("Family huddle", null, delegate { StartHuddle(); });
             menu.Items.Add("Group hug!", null, delegate { StartGroupHug(); });
@@ -2717,6 +2829,7 @@ namespace DesktopPenguins
                 case GOGGLE: case HATFIX: case SLEEPWALK: case LISTEN: case IDLE:
                 case PILLOW: case GRUMP: case SCARF: case VISIT: case REPAIR: case SHOWOFF: case CLAP:
                 case ATTN: case INSPECT: case CHECKPIP: case SNEAK: case STARTLE: case HOLD: case ICEFISH: case FISHWATCH:
+                case MEET:
                     return true;
             }
             return false;
@@ -2738,6 +2851,7 @@ namespace DesktopPenguins
                 case GOGGLE: case HATFIX: case SLEEPWALK: case LISTEN: case IDLE:
                 case PILLOW: case GRUMP: case SCARF: case VISIT: case REPAIR: case SHOWOFF: case CLAP:
                 case ATTN: case INSPECT: case CHECKPIP: case SNEAK: case STARTLE: case HOLD: case ICEFISH: case FISHWATCH:
+                case MEET:
                     return true;
             }
             return false;
@@ -3249,9 +3363,18 @@ namespace DesktopPenguins
                     p.Dir = p.TargetX >= p.HopFromX ? 1 : -1;
                     if (k >= 1f)
                     {
-                        int f = FloorAt((int)p.X);
-                        p.Y = f != int.MinValue ? f : p.SummonY;
-                        p.OnFloor = true; p.Surf = IntPtr.Zero;
+                        var onto = p.SummonOnto;
+                        p.SummonOnto = null;
+                        if (onto != null && penguins.Contains(onto) && !onto.OnFloor && onto.Surf != IntPtr.Zero)
+                        {   // touch down on the window beside them
+                            p.Y = onto.Y; p.OnFloor = false; p.Surf = onto.Surf;
+                        }
+                        else
+                        {
+                            int f = FloorAt((int)p.X);
+                            p.Y = f != int.MinValue ? f : p.SummonY;
+                            p.OnFloor = true; p.Surf = IntPtr.Zero;
+                        }
                         p.Dir = p.FaceDir; p.State = p.NextState; p.Tick = 0;
                     }
                     return;
@@ -3324,6 +3447,14 @@ namespace DesktopPenguins
                     if (p.HopV != 0 || p.HopOff != 0)
                     {
                         p.HopOff += p.HopV; p.HopV += 0.25f;
+                        if (p.HopOff >= 0) { p.HopOff = 0; p.HopV = 0; }
+                    }
+                    return;
+                case MEET:         // driven by UpdateMeetings
+                    if (!(p.Job is Meeting)) { p.Job = null; p.Pose = 0; p.State = LOOK; p.Timer = 30; p.Tick = 0; return; }
+                    if (p.HopV != 0 || p.HopOff != 0)
+                    {
+                        p.HopOff += p.HopV; p.HopV += 0.3f;
                         if (p.HopOff >= 0) { p.HopOff = 0; p.HopV = 0; }
                     }
                     return;
@@ -4162,6 +4293,7 @@ namespace DesktopPenguins
 
         void RivalMeet(Penguin a, Penguin b)
         {
+            if (IsFrost(a) != IsFrost(b)) Nudge(2);           // Ziggy and Bubbles at it again
             if (!a.OnFloor && a.Surf != IntPtr.Zero && rnd.Next(2) == 0) { LedgeShove(a, b); return; }   // up on a window: shove!
             int r = rnd.Next(100);
             if (r < 30 && StartRace(a, b)) return;
@@ -4320,7 +4452,7 @@ namespace DesktopPenguins
         {
             foreach (var a in penguins)
             {
-                if (!IsCore(a) || !Available(a)) continue;
+                if (!(IsCore(a) || IsFrost(a)) || !Available(a)) continue;
                 foreach (var b in penguins)
                 {
                     if (b == a || !Rivals(a, b) || !b.OnFloor || b.Job != null || b.Base != null || Math.Abs(b.Y - a.Y) > 1 || !StandsOnSurface(b)) continue;
@@ -4475,6 +4607,7 @@ namespace DesktopPenguins
                         if (r < 30) { HighFive(a, b); break; }
                         if (r < 60) { WalkTogether(a, b); break; }
                     }
+                    if (Family.SoftRivals(a.Name, b.Name)) { SoftMeet(a, b); break; }
                     if (Rivals(a, b)) { RivalMeet(a, b); break; }
                     bool together = Friends(a, b) || rnd.Next(100) < 30;      // friends always slide off as a pair
                     int slideDir = rnd.Next(2) == 0 ? 1 : -1;
@@ -4613,6 +4746,7 @@ namespace DesktopPenguins
                 case GG:
                     if (p.HopOff < 0) return gg != null && gg.Phase == 2 ? Art.ArmsUp : Art.WaveA;   // high five down the line / all cheer
                     return Art.Stand;
+                case MEET: return MeetFrame(p);
                 case HUDDLE:
                 {
                     var hd = huddle;
@@ -4756,6 +4890,7 @@ namespace DesktopPenguins
                 case PARTY:
                 {
                     if (party != null && p == party.Dj) return (ticks / 5) % 2 == 0 ? Art.TypeA : Art.TypeB;   // on the decks
+                    if (p.Pose == 1) return p.Name == "Doodle" || p.Name == "Bubbles" ? Art.Tease : Art.Stand;   // sitting this round out
                     int beat = ticks / 10;                                   // everyone on the same beat
                     if ((beat / 4) % 2 == 1) drawDir = -p.Dir;
                     switch (beat % 4) { case 0: case 2: return Art.ArmsUp; case 1: return Art.WaveA; default: return Art.WaveB; }
@@ -4881,6 +5016,59 @@ namespace DesktopPenguins
             catch { return true; }
         }
 
+        static int LoadFeud()
+        {
+            try
+            {
+                using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(SettingsKey))
+                {
+                    object v = k == null ? null : k.GetValue("Feud");
+                    return v is int ? Math.Max(0, Math.Min(100, (int)v)) : 70;
+                }
+            }
+            catch { return 70; }
+        }
+
+        void SaveFeud()
+        {
+            if (feud == savedFeud) return;
+            savedFeud = feud;
+            try { using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(SettingsKey)) k.SetValue("Feud", feud); }
+            catch { }
+        }
+
+        void Nudge(int d) { feud = Math.Max(0, Math.Min(100, feud + d)); }
+
+        static int LoadInt(string name, int dflt)
+        {
+            try
+            {
+                using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(SettingsKey))
+                {
+                    object v = k == null ? null : k.GetValue(name);
+                    return v is int ? (int)v : dflt;
+                }
+            }
+            catch { return dflt; }
+        }
+
+        void SaveRomance()
+        {
+            if (romance == savedRomance && dates == savedDates) return;
+            savedRomance = romance; savedDates = dates;
+            try
+            {
+                using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(SettingsKey))
+                { k.SetValue("Romance", romance); k.SetValue("Dates", dates); }
+            }
+            catch { }
+        }
+
+        string FeudWord()
+        {
+            return feud >= 70 ? "feuding" : feud >= 40 ? "frosty" : feud >= 15 ? "thawing" : "friends";
+        }
+
         static void SaveFrostOn(bool on)
         {
             try { using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(SettingsKey)) k.SetValue("Frostbites", on ? 1 : 0); }
@@ -4892,8 +5080,15 @@ namespace DesktopPenguins
 
         // The group for an activity: all of the core five, wherever they are, plus free extras
         // standing nearby on the same floor, up to `max`. group[0] is the one in charge.
-        List<Penguin> PickGroup(int max, Penguin lead = null)
+        List<Penguin> PickGroup(int max, Penguin lead = null, bool neighbours = false)
         {
+            if (neighbours && Friendly())
+            {   // the neighbours come too
+                var g = PickGroup(max, lead);
+                if (g == null) return null;
+                foreach (var q in penguins) if (JoinableFrost(q) && !g.Contains(q)) g.Add(q);
+                return g;
+            }
             var core = penguins.FindAll(Recruitable);
             var free = penguins.FindAll(q => Available(q) && !IsCore(q) && !IsFrost(q));
             if (lead == null)
@@ -4951,17 +5146,38 @@ namespace DesktopPenguins
         bool GroupBusy()
         {
             return (snow != null && snow.Stage < 4 && !snow.Melting)    // a finished snowman is just decoration
-                || tug != null || parade != null || fight != null || tower != null || party != null || hug != null || race != null
-                || gg != null || huddle != null || photo != null || bedtime != null || dinner != null || movie != null;
+                || tug != null || parade != null || fight != null || towers.Count > 0 || party != null || hug != null || race != null
+                || gg != null || huddle != null || photo != null || bedtime != null || dinner != null || movie != null
+                || meetings.Exists(m => m.Kind == Picnic);
         }
 
         static float Clamp(float v, float lo, float hi) { return Math.Max(lo, Math.Min(hi, v)); }
 
         // ---- snowball fight
 
-        void StartFight()
+        void StartFight(bool asked = false)
         {
             if (GroupBusy() || ticks < shooUntil) return;
+            List<Penguin> fam, fro;
+            if (CanVersus() && (asked || rnd.Next(4) != 0) && PickVersus(5, out fam, out fro))
+            {   // each family throws from its own side
+                float vc = MiddleSpot(270);
+                var vf = new Fight { Timer = 900, Versus = true };
+                vf.Left.AddRange(fam); vf.Right.AddRange(fro);
+                foreach (var team in new[] { vf.Left, vf.Right })
+                {
+                    int side = team == vf.Left ? -1 : 1;
+                    for (int i = 0; i < team.Count; i++)
+                    {
+                        var p = team[i];
+                        p.ThrowCool = 30 + rnd.Next(60); p.ThrowAnim = 0; p.HitTimer = 0;
+                        SendTo(p, vf, vc + side * (90 + i * 36), -side, FIGHT);
+                    }
+                }
+                Say(fam[0], BubbleArt.Bang, 50); Say(fro[0], BubbleArt.Bang, 50);
+                fight = vf;
+                return;
+            }
             var group = PickGroup(8);
             if (group == null) return;
             var wa = WorkAreaAt(group[0].X);
@@ -5059,13 +5275,22 @@ namespace DesktopPenguins
                 else { p.State = DAZED; p.Timer = 60; }                       // snowed under
             }
             if (winners != null) foreach (var p in f.All()) if (!winners.Contains(p) && IsCore(p)) CallForHelp(p);
+            if (f.Versus) Nudge(-2);
         }
 
         // ---- penguin tower
 
-        void StartTower()
+        void StartTower(bool asked = false)
         {
             if (GroupBusy() || ticks < shooUntil) return;
+            List<Penguin> fam, fro;
+            if (CanVersus() && (asked || rnd.Next(4) != 0) && PickVersus(4, out fam, out fro) && fam.Count >= 3 && fro.Count >= 3)
+            {   // a tower race: who stacks up first?
+                var mine = TowerOf(fam, SpotX(0), 1); var theirs = TowerOf(fro, SpotX(2), -1);
+                mine.Rival = theirs; theirs.Rival = mine;
+                Say(fam[0], BubbleArt.Bang, 50); Say(fro[0], BubbleArt.Bang, 50);
+                return;
+            }
             var crew = PickGroup(6);
             if (crew == null || crew.Count < 3) return;
             var lead = crew.Find(q => q.Me.Leader);
@@ -5077,14 +5302,39 @@ namespace DesktopPenguins
             var t = new Tower { Crew = crew, Site = site };
             for (int i = 0; i < crew.Count; i++)
                 SendTo(crew[i], t, i == 0 ? site : site - 43 - (i - 1) * 31, 1, READY);   // the rest queue up behind
-            tower = t;
+            towers.Add(t);
+        }
+
+        // One family's tower: biggest at the bottom, the leader near the top, the littlest right on top.
+        Tower TowerOf(List<Penguin> crew, float site, int dir)
+        {
+            crew = new List<Penguin>(crew);
+            var lead = crew.Find(q => q.Name == "Ziggy" || q.Name == "Bubbles");
+            var small = crew.Find(q => q.Me.Small);
+            if (lead != null) { crew.Remove(lead); crew.Add(lead); }
+            if (small != null) { crew.Remove(small); crew.Add(small); }
+            var wa = WorkAreaAt(site);
+            site = Clamp(site, wa.Left + 140, wa.Right - 140);
+            var t = new Tower { Crew = crew, Site = site, Dir = dir };
+            for (int i = 0; i < crew.Count; i++)
+                SendTo(crew[i], t, i == 0 ? site : site - dir * (43 + (i - 1) * 31), dir, READY);
+            towers.Add(t);
+            return t;
         }
 
         void UpdateTower()
         {
-            var t = tower;
-            if (t == null) return;
-            foreach (var p in t.Crew) if (p.Job != t) { EndTower(false); return; }   // someone was taken away
+            foreach (var t in towers.ToArray()) UpdateTower(t);
+        }
+
+        void EndTowers()
+        {
+            foreach (var t in towers.ToArray()) EndTower(t, false);
+        }
+
+        void UpdateTower(Tower t)
+        {
+            foreach (var p in t.Crew) if (p.Job != t) { EndTower(t, false); return; }   // someone was taken away
             var bottom = t.Crew[0];
             switch (t.Phase)
             {
@@ -5102,7 +5352,10 @@ namespace DesktopPenguins
                         if (++t.Built == t.Crew.Count)
                         {   // done: everyone cheers
                             t.Phase = 1; t.Timer = 200;
-                            foreach (var p in t.Crew) Say(p, BubbleArt.Heart, 60);
+                            bool first = t.Rival != null && !t.Rival.Won && towers.Contains(t.Rival);
+                            if (first) t.Won = true;
+                            foreach (var p in t.Crew)
+                                Say(p, t.Rival == null ? BubbleArt.Heart : first ? BubbleArt.Note : BubbleArt.Grr, 60);   // first! / beaten to it
                         }
                     }
                     return;
@@ -5111,17 +5364,24 @@ namespace DesktopPenguins
                     return;
                 default:    // uh oh: it wobbles more and more, then over it goes
                     bottom.X = t.Site + (float)Math.Sin(t.Timer * 0.45) * (2 + (80 - t.Timer) * 0.09f);
-                    if (--t.Timer <= 0) EndTower(true);
+                    if (--t.Timer <= 0) EndTower(t, true);
                     return;
             }
         }
 
-        void EndTower(bool topple)
+        void EndTower(Tower t, bool topple)
         {
-            var t = tower;
-            if (t == null) return;
-            tower = null;
-            if (topple) QueueGoodGame(t.Crew);
+            if (!towers.Remove(t)) return;
+            if (topple)
+            {
+                if (t.Rival == null) QueueGoodGame(t.Crew);
+                else if (!towers.Contains(t.Rival))
+                {   // both down: a good game all round
+                    var both = new List<Penguin>(t.Crew); both.AddRange(t.Rival.Crew);
+                    QueueGoodGame(both);
+                    Nudge(-2);
+                }
+            }
             int dir = rnd.Next(2) == 0 ? 1 : -1;
             for (int i = t.Crew.Count - 1; i >= 0; i--)
             {
@@ -5146,9 +5406,24 @@ namespace DesktopPenguins
 
         // ---- dance party
 
-        void StartParty()
+        void StartParty(bool asked = false)
         {
             if (GroupBusy() || ticks < shooUntil) return;
+            List<Penguin> fam, fro;
+            if (CanVersus() && (asked || rnd.Next(4) != 0) && PickVersus(6, out fam, out fro))
+            {   // a dance-off: two rows facing each other, taking turns to show off
+                float vc = MiddleSpot(230);
+                var vp = new Party { Crew = new List<Penguin>(fam), Timer = 900, Left = fam, Right = fro };
+                vp.Crew.AddRange(fro);
+                foreach (var row in new[] { fam, fro })
+                {
+                    int side = row == fam ? -1 : 1;
+                    for (int i = 0; i < row.Count; i++) SendTo(row[i], vp, vc + side * (22 + i * 34), -side, PARTY);
+                }
+                Say(fam[0], BubbleArt.Note); Say(fro[0], BubbleArt.Grr, 50);
+                party = vp;
+                return;
+            }
             var crew = PickGroup(10);
             if (crew == null) return;
             var dj = crew.Find(q => q.Me.Leader);
@@ -5176,8 +5451,25 @@ namespace DesktopPenguins
             pa.Crew.RemoveAll(q => q.Job != pa);
             if (pa.Crew.Count < 2) { EndParty(); return; }
             if (!pa.Crew.Exists(q => q.State == PARTY)) return;                     // still gathering
+            List<Penguin> sitOut = null;
+            if (pa.Left != null && pa.Timer > 160)
+            {   // the dance-off: one family dances, the other watches (arms folded)... then swap
+                bool famTurn = (pa.Timer / 150) % 2 == 1;
+                sitOut = famTurn ? pa.Right : pa.Left;
+                if (pa.Timer % 150 == 149)
+                {
+                    var on = famTurn ? pa.Left : pa.Right;
+                    if (on.Count > 0) Say(on[rnd.Next(on.Count)], BubbleArt.Bang, 40);   // our turn!
+                }
+            }
+            if (pa.Left != null && pa.Timer == 160)
+                foreach (var q in pa.Crew) if (q.State == PARTY) Say(q, BubbleArt.Heart, 45);   // oh, everyone dance!
             foreach (var p in pa.Crew)
-                if (p.State == PARTY && p != pa.Dj) p.HopOff = (ticks / 10) % 2 == 0 ? -3 : 0;   // bounce on the beat
+            {
+                p.Pose = sitOut != null && sitOut.Contains(p) ? 1 : 0;
+                if (p.State == PARTY && p != pa.Dj) p.HopOff = p.Pose == 1 ? 0 : (ticks / 10) % 2 == 0 ? -3 : 0;   // bounce on the beat
+                if (p.Pose == 1 && p.State == PARTY && ticks % 90 == (p.Name.Length * 7) % 90 && rnd.Next(3) == 0) Say(p, BubbleArt.Grr, 35);   // not bad... hmph
+            }
             if (ticks % 45 == 0)
             {
                 var q = pa.Crew[rnd.Next(pa.Crew.Count)];
@@ -5194,10 +5486,11 @@ namespace DesktopPenguins
             foreach (var p in pa.Crew)
             {
                 if (p.Job != pa) continue;
-                p.Job = null; p.HopOff = 0; p.Tick = 0;
+                p.Job = null; p.HopOff = 0; p.Tick = 0; p.Pose = 0;
                 p.State = LOOK; p.Timer = 40;
                 Say(p, BubbleArt.Heart, 50);
             }
+            if (pa.Left != null) Nudge(-3);                                    // everyone danced together in the end
         }
 
         // ---- family moments
@@ -5219,6 +5512,18 @@ namespace DesktopPenguins
         void StartGoodGame(List<Penguin> who)
         {
             var crew = who.FindAll(q => penguins.Contains(q) && q.State != HELD && q.State != OFF && (q.Job == null || q.Job is Penguin));
+            var z = crew.Find(q => q.Name == "Ziggy"); var bb = crew.Find(q => q.Name == "Bubbles");
+            if (z != null && bb != null && feud >= 40)
+            {   // "shake HIS flipper? never." backs turned, arms folded
+                crew.Remove(z); crew.Remove(bb);
+                foreach (var q in new[] { z, bb })
+                {
+                    var o = q == z ? bb : z;
+                    q.Job = null; q.State = LOOK; q.Timer = 90; q.Tick = 0; q.HopOff = 0; q.HopV = 0;
+                    q.Dir = o.X >= q.X ? -1 : 1;
+                    Say(q, BubbleArt.Grr, 60);
+                }
+            }
             if (crew.Count < 2) return;
             crew.Sort((a, b) => a.X.CompareTo(b.X));
             float avg = 0; foreach (var q in crew) avg += q.X; avg /= crew.Count;
@@ -5272,15 +5577,628 @@ namespace DesktopPenguins
                 if (q.Job == g) { q.Job = null; q.HopOff = 0; q.HopV = 0; q.Tick = 0; q.State = LOOK; q.Timer = 30; }
         }
 
+        // ---- across the fence: get-togethers in the shared middle
+
+        // Three meeting spots spread across the middle third, so a couple of these can happen at once.
+        float SpotX(int i)
+        {
+            float lo, hi; Span(out lo, out hi);
+            float third = (hi - lo) / 3;
+            return lo + third + third * (0.2f + 0.3f * i);
+        }
+
+        void TryMeeting()
+        {
+            var bag = new List<int>();
+            bool kidsBusy = meetings.Exists(m => m.Kind >= MeetCute && m.Kind <= Balcony);
+            for (int k = 0; k < MeetPairs.Length; k++)
+            {
+                if (ticks < meetCool[k] || meetings.Exists(m => m.Kind == k)) continue;
+                if (k == Judge) continue;                       // only when there's a new snowman
+                if (k >= MeetCute && k <= Balcony && kidsBusy) continue;
+                if ((k == MeetCute) != (romance == 0) && k <= Balcony && k >= MeetCute) continue;   // they have to meet first
+                if (k == Picnic && (romance == 0 || dates < 4 || meetings.Count > 0)) continue;
+                var a = Core(MeetPairs[k][0]); var b = Core(MeetPairs[k][1]);
+                if (a == null || b == null || !Available(a) || a.Rider != null) continue;
+                if (k == Balcony ? !OnBalcony(b) : (!Available(b) || b.Rider != null)) continue;
+                int w = k == LeadersMeet ? 1 + feud / 25 : k == TeaMeet ? 1 + (100 - feud) / 25
+                      : k == MeetCute || k == Balcony ? 6 : k == Picnic ? 10 : 3;      // the mood picks the scene
+                for (int i = 0; i < w; i++) bag.Add(k);
+            }
+            if (bag.Count == 0) return;
+            var free = new List<int>();
+            for (int i = 0; i < 3; i++) if (!meetings.Exists(m => m.Spot == i)) free.Add(i);
+            int kind = bag[rnd.Next(bag.Count)];
+            if (kind != Balcony && free.Count == 0) return;
+            int spot = kind == Balcony ? -1 : kind == Picnic ? 1 : free[rnd.Next(free.Count)];
+            var A = Core(MeetPairs[kind][0]); var B = Core(MeetPairs[kind][1]);
+            float x = spot >= 0 ? SpotX(spot) : B.X;
+            var mt = new Meeting { A = A, B = B, Kind = kind, Spot = spot, X = x };
+            switch (kind)
+            {
+                case Balcony:
+                {   // Pearl's up on a window; Pip flies up to her
+                    B.Job = mt; B.State = MEET; B.Tick = 0; SetPose(B, 20, A.X >= B.X ? 1 : -1);
+                    Say(B, BubbleArt.Hearts, 60);
+                    Track tr;
+                    float side = A.X >= B.X ? 1 : -1, bx = B.X + side * 24;
+                    if (tracks.TryGetValue(B.Surf, out tr) && (bx < tr.R.Left + 14 || bx > tr.R.Right - 14)) { side = -side; bx = B.X + side * 24; }
+                    A.Job = mt; A.TargetX = bx; A.FaceDir = -(int)side; A.NextState = MEET;
+                    Summon(A);
+                    A.SummonOnto = B; A.SummonY = B.Y;
+                    A.Timer = (int)Clamp((Math.Abs(bx - A.X) + Math.Abs(B.Y - A.Y)) / 6f, 45, 150);
+                    break;
+                }
+                case Picnic:
+                    StartPicnic(mt);
+                    if (mt.Crew == null) return;
+                    break;
+                case MeetCute:                      // walking along... and there she is
+                    SendTo(A, mt, x - 60, 1, MEET); SendTo(B, mt, x + 60, -1, MEET); break;
+                case DateMeet:                      // sneaking off to meet in the middle
+                    SendTo(A, mt, x - 14, 1, MEET); SendTo(B, mt, x + 14, -1, MEET); break;
+                case SnackMeet:                     // Pebble snacking, back to the Frostbites' side; Mochi creeping up behind
+                    mt.Nap = rnd.Next(100) < (feud < 40 ? 60 : 25);
+                    SendTo(A, mt, x, -1, MEET); SendTo(B, mt, x + 90, -1, MEET); break;
+                case ArtMeet:                       // Wobble at work; Doodle comes to "critique"
+                    SendTo(A, mt, x, -1, MEET); SendTo(B, mt, x + 60, -1, MEET); break;
+                case TeaMeet:
+                    SendTo(A, mt, x - 17, 1, MEET); SendTo(B, mt, x + 17, -1, MEET); break;
+                default:                            // face to face
+                    SendTo(A, mt, x - 30, 1, MEET); SendTo(B, mt, x + 30, -1, MEET); break;
+            }
+            meetings.Add(mt);
+        }
+
+        // Done with the meeting: back to normal, then "then" (or a look round).
+        void Unmeet(Penguin p, Meeting m, int then = LOOK, int timer = 40)
+        {
+            if (p.Job != m) return;
+            p.Job = null; p.Pose = 0; p.Tick = 0; p.HopOff = 0; p.HopV = 0;
+            p.State = then; p.Timer = timer;
+        }
+
+        void EndMeeting(Meeting m)
+        {
+            meetings.Remove(m);
+            meetCool[m.Kind] = ticks + 2400 + rnd.Next(2400);
+            Unmeet(m.A, m); Unmeet(m.B, m);
+            if (m.Catcher != null) Unmeet(m.Catcher, m);
+            if (m.Crew != null) foreach (var q in m.Crew) Unmeet(q, m);
+            if (m.Blanket != null) { m.Blanket.Close(); m.Blanket = null; }
+        }
+
+        static void SetPose(Penguin p, int pose, int dir = 0)
+        {
+            if (p.Pose != pose) { p.Pose = pose; p.Tick = 0; }
+            if (dir != 0) p.Dir = dir;
+        }
+
+        void UpdateMeetings()
+        {
+            foreach (var m in meetings.ToArray())
+            {
+                if (m.A.Job != m || m.B.Job != m || !penguins.Contains(m.A) || !penguins.Contains(m.B)) { EndMeeting(m); continue; }
+                if (m.Crew != null) m.Crew.RemoveAll(q => q.Job != m);
+                if (m.Catcher != null && m.Catcher.Job != m) { m.Catcher = null; m.Caught = 0; }
+                if (!m.Arrived)
+                {
+                    if (m.A.State == MEET && m.B.State == MEET) { m.Arrived = true; m.T = 0; }
+                    else if (++m.Wait > 1200) EndMeeting(m);
+                    continue;
+                }
+                m.T++;
+                switch (m.Kind)
+                {
+                    case LeadersMeet: Leaders(m); break;
+                    case RaceMeet:    Speedsters(m); break;
+                    case SnackMeet:   Snack(m); break;
+                    case ArtMeet:     Critic(m); break;
+                    case TeaMeet:     Tea(m); break;
+                    case MeetCute:    FirstSight(m); break;
+                    case DateMeet:    SecretDate(m); break;
+                    case Balcony:     BalconyScene(m); break;
+                    case Picnic:      PicnicScene(m); break;
+                    case Judge:       Judging(m); break;
+                }
+            }
+        }
+
+        // Walk a meeting penguin; false if it bumped into something and the moment's spoiled.
+        bool MeetWalk(Meeting m, Penguin p, float v)
+        {
+            Move(p, v);
+            if (p.State == MEET) return true;
+            EndMeeting(m);
+            return false;
+        }
+
+        // Ziggy and Bubbles: a chest-out stand-off at the border. Unless things have thawed...
+        void Leaders(Meeting m)
+        {
+            Penguin z = m.A, b = m.B;
+            int t = m.T;
+            if (t == 1)
+            {
+                SetPose(z, 0, 1); SetPose(b, 0, -1);
+                if (feud < 25) { Say(z, BubbleArt.Question, 40); Say(b, BubbleArt.Question, 40); }
+                else { Say(b, BubbleArt.Bang, 45); }
+            }
+            if (feud < 25)
+            {   // ...a gruff, grudging flipper-shake
+                if (t == 50)
+                {
+                    meetings.Remove(m); meetCool[m.Kind] = ticks + 3000;
+                    Unmeet(z, m); Unmeet(b, m);
+                    MakeUp(z, b);
+                    Nudge(-4);
+                }
+                return;
+            }
+            if (t == 25) Say(z, BubbleArt.Grr, 50);
+            if (t == 50) { SetPose(b, 14); }                                   // Bubbles: "this is OUR side"
+            if (t == 80) { SetPose(z, 11); z.HopV = -3f; Say(z, BubbleArt.Grr, 40); }   // Ziggy puffs up
+            if (t == 100) { SetPose(b, 11); b.HopV = -3f; }
+            if (t == 120) SetPose(z, 0);
+            if (t == 140)
+            {   // eyes locked... whoever blinks first
+                meetings.Remove(m); meetCool[m.Kind] = ticks + 2400 + rnd.Next(2400);
+                Unmeet(z, m); Unmeet(b, m);
+                Stare(z, b);
+                Nudge(4);
+            }
+        }
+
+        // Puddle and Bolt: "bet you can't beat me" ... race!
+        void Speedsters(Meeting m)
+        {
+            Penguin a = m.A, b = m.B;
+            int t = m.T;
+            if (t == 1) { SetPose(a, 11, 1); SetPose(b, 11, -1); Say(a, BubbleArt.Bang, 40); Say(b, BubbleArt.Bang, 40); }
+            if (t % 20 == 5) (t % 40 == 5 ? a : b).HopV = -2.8f;            // bouncing on their toes
+            if (t == 70)
+            {
+                meetings.Remove(m); meetCool[m.Kind] = ticks + 2400 + rnd.Next(2400);
+                Unmeet(a, m, WALK); Unmeet(b, m, WALK);
+                if (!StartRace(a, b)) Tease(a, b);
+                Nudge(-2);
+            }
+        }
+
+        // Pebble's snack... and Mochi.
+        void Snack(Meeting m)
+        {
+            Penguin pb = m.A, mo = m.B;
+            int t = m.T;
+            if (t == 1) { SetPose(pb, 2, -1); SetPose(mo, 0, -1); Say(pb, BubbleArt.Fish, 50); }
+            if (m.Nap)
+            {   // she wanders over, he shares, and they both nod off
+                if (t > 30 && t < 400 && Math.Abs(mo.X - (pb.X + 22)) > 2)
+                {
+                    SetPose(mo, 10, -1);
+                    if (!MeetWalk(m, mo, Math.Min(1.0f, Math.Abs(mo.X - (pb.X + 22))))) return;
+                    if (Math.Abs(mo.X - (pb.X + 22)) <= 2) { SetPose(mo, 2, -1); Say(pb, BubbleArt.Question, 35); Say(mo, BubbleArt.Heart, 45); }
+                }
+                if (t == 220) { SetPose(pb, 15); SetPose(mo, 15); Say(pb, BubbleArt.Zzz, 60); }
+                if (t == 260) SpawnHeart((pb.X + mo.X) / 2, pb.Y - HeadOf(pb) - 6);
+                if (t == 330)
+                {   // fast asleep, back to back
+                    meetings.Remove(m); meetCool[m.Kind] = ticks + 3000 + rnd.Next(2400);
+                    Unmeet(pb, m, SLEEP, 260 + rnd.Next(120)); Unmeet(mo, m, SLEEP, 260 + rnd.Next(120));
+                    pb.Dir = -1; mo.Dir = 1;
+                    Nudge(-4);
+                }
+                return;
+            }
+            if (m.Wait >= 0 && t > 40)
+            {   // tiptoe... tiptoe...
+                float gap = mo.X - pb.X;
+                if (gap > 20) { SetPose(mo, 3, -1); if (!MeetWalk(m, mo, 0.8f)) return; return; }
+                m.Wait = -t;                                                // got close: the grab
+                SetPose(pb, 0, 1); Say(pb, BubbleArt.Bang, 40);
+                SetPose(mo, 2, 1); Say(mo, BubbleArt.Fish, 50);
+            }
+            if (m.Wait < 0)
+            {
+                int u = t + m.Wait;
+                if (u > 12 && u < 90) { SetPose(mo, 10, 1); if (!MeetWalk(m, mo, 2.4f)) return; }   // and she's off with it
+                if (u == 20) Say(pb, BubbleArt.Grr, 60);
+                if (u == 30) Say(mo, BubbleArt.Note, 40);
+                if (u == 90)
+                {
+                    meetings.Remove(m); meetCool[m.Kind] = ticks + 2400 + rnd.Next(2400);
+                    Unmeet(mo, m, DANCE, 40);
+                    Unmeet(pb, m);
+                    Sulk(pb, -1);
+                    Nudge(1);
+                }
+            }
+        }
+
+        // Wobble tinkering; Doodle "critiquing". Then sketching it when he's not looking.
+        void Critic(Meeting m)
+        {
+            Penguin w = m.A, d = m.B;
+            int t = m.T;
+            if (t == 1) { SetPose(w, 4, -1); SetPose(d, 5, -1); }
+            if (t == 60) Say(d, BubbleArt.Grr, 50);                         // hmph. amateur.
+            if (t == 100) { SetPose(w, 0, 1); Say(w, BubbleArt.Question, 40); }
+            if (t == 118) { SetPose(w, 13); w.HatAskew = true; Say(w, BubbleArt.Bang, 40); }   // flustered: drops everything
+            if (t == 126) { SetPose(d, 5, 1); }                                // turns her beak up
+            if (t == 170) { SetPose(w, 4, -1); }                               // back to work, cheeks burning
+            if (t == 190) { SetPose(d, 6, -1); }                               // ...and out comes the sketchpad
+            if (t == 230) Say(d, BubbleArt.Heart, 50);
+            if (t == 320) { SetPose(w, 0, 1); Say(w, BubbleArt.Question, 40); }   // he turns round...
+            if (t == 324) { SetPose(d, 5, 1); Say(d, BubbleArt.Grr, 45); }        // ...nothing to see here
+            if (t == 360)
+            {
+                meetings.Remove(m); meetCool[m.Kind] = ticks + 2400 + rnd.Next(2400);
+                Unmeet(d, m, WALK); d.Dir = 1;
+                Unmeet(w, m);
+                Nudge(-2);
+            }
+        }
+
+        // Waddles and Juniper: a sit-down, a natter, some knitting, a hug.
+        void Tea(Meeting m)
+        {
+            Penguin wd = m.A, j = m.B;
+            int t = m.T;
+            if (t == 1) { SetPose(wd, 0, 1); SetPose(j, 0, -1); Say(wd, BubbleArt.Heart, 45); Say(j, BubbleArt.Heart, 45); }
+            if (t == 30) { SetPose(wd, 8); SetPose(j, 7); }
+            if (t > 30 && t < 330 && t % 60 == 0) Say(t % 120 == 0 ? wd : j, rnd.Next(3) == 0 ? BubbleArt.Heart : BubbleArt.Note, 40);   // chatter
+            if (t == 180) SetPose(wd, 9);                                      // humming along
+            if (t == 330) { SetPose(wd, 12); SetPose(j, 12); Say(j, BubbleArt.Hearts, 50); }
+            if (t == 345 || t == 375) SpawnHeart((wd.X + j.X) / 2, wd.Y - HeadOf(wd) - 6);
+            if (t == 400)
+            {
+                meetings.Remove(m); meetCool[m.Kind] = ticks + 2400 + rnd.Next(2400);
+                Unmeet(wd, m, WAVE, 45); Unmeet(j, m, WAVE, 45);
+                Nudge(-6);
+            }
+        }
+
+        // Pearl standing about on top of a window: a balcony.
+        bool OnBalcony(Penguin p)
+        {
+            return p.Job == null && !p.OnFloor && p.Surf != IntPtr.Zero && p.Base == null && p.Rider == null && p.HopOff == 0
+                && (p.State == WALK || p.State == LOOK) && !WindowMoving(p.Surf);
+        }
+
+        static int HomeDir(Penguin p) { return IsFrost(p) ? 1 : -1; }
+
+        // ---- family vs family
+
+        static bool JoinableFrost(Penguin q)
+        {
+            return IsFrost(q) && q.State != HELD && q.State != OFF && (q.Job == null || q.Job is Penguin);
+        }
+
+        // Getting on: the neighbours are welcome at hugs, huddles and photos.
+        bool Friendly() { return frostOn && feud < 40; }
+
+        bool CanVersus()
+        {
+            if (!frostOn) return false;
+            int n = 0;
+            foreach (var q in penguins) if (JoinableFrost(q)) n++;
+            return n >= 3;
+        }
+
+        // Two teams: the family (Ziggy first) and the Frostbites (Bubbles first).
+        bool PickVersus(int perSide, out List<Penguin> fam, out List<Penguin> fro)
+        {
+            fam = penguins.FindAll(q => IsCore(q) && Recruitable(q));
+            fro = penguins.FindAll(JoinableFrost);
+            foreach (var team in new[] { fam, fro })
+            {
+                var lead = team.Find(q => q.Name == "Ziggy" || q.Name == "Bubbles");
+                if (lead != null) { team.Remove(lead); team.Insert(0, lead); }
+                if (team.Count > perSide) team.RemoveRange(perSide, team.Count - perSide);
+            }
+            return fam.Count >= 2 && fro.Count >= 2;
+        }
+
+        // A place in the shared middle with room either side.
+        float MiddleSpot(float room)
+        {
+            float c = SpotX(1);
+            var wa = WorkAreaAt(c);
+            return Clamp(c, wa.Left + room, wa.Right - room);
+        }
+
+        // Pip and Pearl, the very first time. Both freeze... hearts... and both run off, blushing.
+        void FirstSight(Meeting m)
+        {
+            Penguin pip = m.A, pearl = m.B;
+            int t = m.T;
+            if (t == 1) { SetPose(pip, 0, 1); SetPose(pearl, 0, -1); }
+            if (t == 12) { Say(pip, BubbleArt.Bang, 30); Say(pearl, BubbleArt.Bang, 30); }
+            if (t == 40) { Say(pip, BubbleArt.Hearts, 70); Say(pearl, BubbleArt.Hearts, 70); SpawnHeart((pip.X + pearl.X) / 2, pip.Y - 50); }
+            if (t == 70) { SetPose(pip, 16); SetPose(pearl, 16); }
+            if (t >= 120 && t < 170)
+            {   // eek! back to their own side
+                SetPose(pip, 10, -1); SetPose(pearl, 10, 1);
+                if (!MeetWalk(m, pip, 1.7f) || !MeetWalk(m, pearl, 1.7f)) return;
+            }
+            if (t == 175) { SetPose(pip, 16, 1); SetPose(pearl, 16, -1); Say(pip, BubbleArt.Heart, 50); }   // ...a peek back
+            if (t == 195) Say(pearl, BubbleArt.Heart, 50);
+            if (t == 260)
+            {
+                meetings.Remove(m); meetCool[m.Kind] = ticks + 2000;
+                Unmeet(pip, m, WALK); pip.Dir = -1;
+                Unmeet(pearl, m, WALK); pearl.Dir = 1;
+                romance = 1; dates = 0; SaveRomance();
+            }
+        }
+
+        // A secret date in the middle: a fish for her, hearts all round... unless someone's dad finds out.
+        void SecretDate(Meeting m)
+        {
+            Penguin pip = m.A, pearl = m.B;
+            int t = m.T;
+            if (m.Caught == 0)
+            {
+                if (t == 1) { SetPose(pip, 11, 1); SetPose(pearl, 11, -1); pip.HopV = -2.6f; pearl.HopV = -2.6f; Say(pip, BubbleArt.Hearts, 50); }
+                if (t == 30) { SetPose(pip, 18); Say(pip, BubbleArt.Fish, 45); }          // brought you something
+                if (t == 70) { SetPose(pip, 16); SetPose(pearl, 2); Say(pearl, BubbleArt.Hearts, 55); }
+                if (t == 90 || t == 150) SpawnHeart((pip.X + pearl.X) / 2, pip.Y - 48);
+                if (t == 170) SetPose(pearl, 16);
+                if (t == 180 && m.Catcher == null)
+                {   // were they seen?
+                    int odds = feud >= 70 ? 60 : feud >= 40 ? 45 : feud >= 15 ? 25 : 10;
+                    var dads = new List<Penguin>();
+                    foreach (var n in new[] { "Ziggy", "Bubbles" }) { var q = Core(n); if (q != null && Available(q)) dads.Add(q); }
+                    if (dads.Count > 0 && rnd.Next(100) < odds)
+                    {
+                        var c = dads[rnd.Next(dads.Count)];
+                        var kid = IsFrost(c) ? pearl : pip;
+                        int side = HomeDir(kid);
+                        SendTo(c, m, kid.X + side * 30, -side, MEET);
+                        if (c.State == GOTO && Math.Abs(c.X - c.TargetX) > 220) Summon(c);   // storms straight over
+                        Say(c, BubbleArt.Bang, 60);
+                        m.Catcher = c;
+                    }
+                }
+                if (m.Catcher != null && m.Catcher.State == MEET) { m.Caught = t; return; }
+                if (t > 180 && m.Catcher == null && t >= 300)
+                {   // a sweet goodbye
+                    meetings.Remove(m); meetCool[m.Kind] = ticks + 2400 + rnd.Next(2400);
+                    Unmeet(pip, m, WAVE, 45); Unmeet(pearl, m, WAVE, 45);
+                    dates++; Nudge(-2); SaveRomance();
+                }
+                if (t > 700) EndMeeting(m);                                  // dad never made it
+                return;
+            }
+            // caught!
+            var dad = m.Catcher;
+            var mine = IsFrost(dad) ? pearl : pip;
+            var other = mine == pip ? pearl : pip;
+            int u = t - m.Caught;
+            if (u == 1)
+            {
+                SetPose(dad, 0, mine.X >= dad.X ? 1 : -1); Say(dad, BubbleArt.Grr, 70);
+                SetPose(mine, 0, dad.X >= mine.X ? 1 : -1); SetPose(other, 0, dad.X >= other.X ? 1 : -1);
+                Say(mine, BubbleArt.Bang, 40); Say(other, BubbleArt.Bang, 40);
+            }
+            if (u > 40 && u < 190)
+            {   // marched home; the other one scarpers
+                int h = HomeDir(mine);
+                SetPose(mine, 10, h); SetPose(dad, 10, h);
+                if (!MeetWalk(m, mine, 0.9f) || !MeetWalk(m, dad, 0.9f)) return;
+                if (u < 110) { SetPose(other, 10, HomeDir(other)); if (!MeetWalk(m, other, 2.2f)) return; }
+                else if (u == 110) { SetPose(other, 0, -HomeDir(other)); Say(other, BubbleArt.Heart, 50); }   // a sad look back
+            }
+            if (u == 80) Say(mine, BubbleArt.Cloud, 60);
+            if (u == 190)
+            {
+                meetings.Remove(m); meetCool[m.Kind] = ticks + 3000 + rnd.Next(2400);
+                Unmeet(dad, m, LOOK, 40);
+                Unmeet(mine, m); Sulk(mine, HomeDir(mine));
+                Unmeet(other, m); Sulk(other, HomeDir(other));
+                dates++; Nudge(3); SaveRomance();
+            }
+        }
+
+        // Up on the window: Pip flies up to Pearl, and they sit together a while.
+        void BalconyScene(Meeting m)
+        {
+            Penguin pip = m.A, pearl = m.B;
+            int t = m.T;
+            if (t == 1) { SetPose(pip, 11, pearl.X >= pip.X ? 1 : -1); SetPose(pearl, 16, pip.X >= pearl.X ? 1 : -1); pip.HopV = -2.6f; Say(pip, BubbleArt.Hearts, 60); }
+            if (t == 30) { SetPose(pip, 8); SetPose(pearl, 8); }
+            if (t % 70 == 50 && t < 330) SpawnHeart((pip.X + pearl.X) / 2, pip.Y - 40);
+            if (t == 200) Say(pearl, BubbleArt.Heart, 50);
+            if (t == 360)
+            {
+                meetings.Remove(m); meetCool[m.Kind] = ticks + 3000 + rnd.Next(2400);
+                Unmeet(pip, m, LOOK, 40); Unmeet(pearl, m, LOOK, 60);
+                dates++; Nudge(-2); SaveRomance();
+            }
+        }
+
+        // The mums have had enough of the feud: everyone to the middle for a picnic.
+        void StartPicnic(Meeting m)
+        {
+            float c = SpotX(1);
+            m.X = c;
+            m.Floor = FloorAt((int)c);
+            if (m.Floor == int.MinValue) return;
+            m.Crew = new List<Penguin>();
+            string[] fam = { "Waddles", "Ziggy", "Puddle", "Wobble", "Pebble" };
+            string[] fro = { "Juniper", "Bubbles", "Bolt", "Doodle", "Mochi" };
+            for (int f = 0; f < 2; f++)
+            {
+                int i = 0, dir = f == 0 ? 1 : -1;
+                foreach (var n in f == 0 ? fam : fro)
+                {
+                    var q = Core(n);
+                    if (q == null || q.State == HELD || q.State == OFF || !(q.Job == null || q.Job is Penguin) || q.Rider != null) continue;
+                    SendTo(q, m, c - dir * (44 + i * 24), dir, MEET);
+                    m.Crew.Add(q); i++;
+                }
+            }
+            if (m.A.Job != m || m.B.Job != m) { foreach (var q in m.Crew) Unmeet(q, m, WALK); m.Crew = null; return; }
+            foreach (var n in new[] { "Pip", "Pearl" })
+            {
+                var q = Core(n);
+                if (q == null || q.State == HELD || q.State == OFF || !(q.Job == null || q.Job is Penguin) || q.Rider != null) continue;
+                bool fb = IsFrost(q);
+                SendTo(q, m, c + (fb ? 14 : -14), fb ? -1 : 1, MEET);
+                m.Crew.Add(q);
+            }
+            m.Blanket = new SpriteWindow(SnowArt.BlanketW, SnowArt.BlanketH, true);
+            m.Blanket.Show();
+            Say(m.A, BubbleArt.Heart, 60); Say(m.B, BubbleArt.Heart, 60);
+        }
+
+        void PicnicScene(Meeting m)
+        {
+            int t = m.T;
+            if (m.Blanket != null && t % 10 == 1)
+                m.Blanket.Draw(screenDC, memDC, blanketHbm, (int)m.X - SnowArt.BlanketW / 2, m.Floor - SnowArt.BlanketH + 4);
+            var pip = Core("Pip"); var pearl = Core("Pearl"); var z = Core("Ziggy"); var b = Core("Bubbles");
+            bool zIn = z != null && z.Job == m, bIn = b != null && b.Job == m;
+            foreach (var q in m.Crew)
+                if (q.State == MEET && q.Pose == 0) SetPose(q, q == z || q == b ? 8 : 17);   // sat down and tucking in
+            if (t > 20 && t < 480 && t % 60 == 0)
+            {
+                var q = m.Crew[rnd.Next(m.Crew.Count)];
+                if (q.State == MEET && q != z && q != b) Say(q, rnd.Next(2) == 0 ? BubbleArt.Note : BubbleArt.Heart, 40);
+            }
+            if (t == 180 && pip != null && pip.Job == m && pip.State == MEET) { SetPose(pip, 18); Say(pip, BubbleArt.Fish, 45); }   // for you
+            if (t == 220 && pearl != null && pearl.Job == m && pearl.State == MEET)
+            {
+                Say(pearl, BubbleArt.Hearts, 60);
+                SpawnHeart(pearl.X - 8, pearl.Y - 40);
+                if (pip != null && pip.Job == m) SetPose(pip, 17);
+            }
+            if (t == 300 && bIn) Say(b, BubbleArt.Grr, 45);                // the dads, keeping an eye on each other...
+            if (t == 340 && zIn) Say(z, BubbleArt.Grr, 45);
+            if (t == 400 && bIn) { SetPose(b, 17); Say(b, BubbleArt.Fish, 40); }   // ...oh, go on then
+            if (t == 430 && zIn) { SetPose(z, 17); Say(z, BubbleArt.Heart, 45); }
+            if (t == 460 && bIn) Say(b, BubbleArt.Heart, 45);
+            if (t == 280 || t == 450) foreach (var q in m.Crew) if (q.Name == "Pebble" || q.Name == "Mochi") if (q.State == MEET && rnd.Next(2) == 0) SetPose(q, 21);   // full and sleepy
+            if (t == 540)
+            {   // everyone up, a wave, and the feud's (mostly) forgotten
+                meetings.Remove(m); meetCool[m.Kind] = ticks + 6000;
+                if (m.Blanket != null) { m.Blanket.Close(); m.Blanket = null; }
+                foreach (var q in m.Crew.ToArray())
+                {
+                    if (q.Job != m) continue;
+                    Unmeet(q, m, WAVE, 50 + rnd.Next(30));
+                    if (rnd.Next(3) == 0) SpawnHeart(q.X, q.Y - HeadOf(q) - 6);
+                }
+                if (z != null && b != null) MakeTruce(z, b, 9000);
+                feud = Math.Min(feud, 8); dates = 0; SaveFeud(); SaveRomance();
+            }
+            if (t > 900) EndMeeting(m);
+        }
+
+        bool StartJudging()
+        {
+            var s = snow;
+            var w = Core("Wobble"); var d = Core("Doodle");
+            if (s == null || s.Stage != 4 || s.Melting || w == null || d == null || !Available(w) || !Available(d)) return false;
+            if (GroupBusy() || meetings.Exists(m => m.Kind == Judge || m.A == w || m.B == d)) return false;
+            var wa = WorkAreaAt(s.X);
+            int side = s.X + 90 < wa.Right ? 1 : -1;                     // Doodle stands on whichever side has room
+            var mt = new Meeting { A = w, B = d, Kind = Judge, Spot = -1, X = s.X };
+            SendTo(w, mt, s.X - side * 34, side, MEET);
+            SendTo(d, mt, s.X + side * 44, -side, MEET);
+            meetings.Add(mt);
+            return true;
+        }
+
+        // Wobble shows off his snowman; Doodle is not impressed. Then sketches it the moment he's gone.
+        void Judging(Meeting m)
+        {
+            Penguin w = m.A, d = m.B;
+            int t = m.T, toSnow = m.X >= d.X ? 1 : -1;
+            if (t == 1) { SetPose(w, 11, -toSnow); w.HopV = -3f; Say(w, BubbleArt.Star, 50); SetPose(d, 0, toSnow); }   // ta-da!
+            if (t == 30) SetPose(w, 0);
+            if (t == 50) { SetPose(d, 5); Say(d, BubbleArt.Grr, 55); }            // hmph. lopsided.
+            if (t == 110) { SetPose(d, 5, -toSnow); }                          // beak in the air
+            if (t == 120) Say(w, BubbleArt.Cloud, 60);
+            if (t > 150 && t < 230) { SetPose(w, 10, toSnow); if (!MeetWalk(m, w, 0.8f)) return; }   // off he trudges
+            if (t == 230) SetPose(w, 0);
+            if (t == 250) { SetPose(d, 6, toSnow); }                           // ...out comes the sketchpad
+            if (t == 300) Say(d, BubbleArt.Heart, 50);
+            if (t == 400)
+            {
+                meetings.Remove(m); meetCool[m.Kind] = ticks + 2400;
+                Unmeet(d, m, WALK); d.Dir = HomeDir(d);
+                Unmeet(w, m);
+                Nudge(-1);
+            }
+        }
+
+        int MeetFrame(Penguin p)
+        {
+            int t = p.Tick;
+            switch (p.Pose)
+            {
+                case 2:  return (t / 12) % 2 == 0 ? Art.EatA : Art.EatB;            // snacking
+                case 3:  return (t / 8) % 2 == 0 ? Art.TiptoeA : Art.TiptoeB;       // sneaking up
+                case 4:  return (t / 6) % 2 == 0 ? Art.RepairA : Art.RepairB;       // clank, clank
+                case 5:  return Art.Tease;                                         // hmph
+                case 6:  return (t / 9) % 2 == 0 ? Art.DrawA : Art.DrawB;           // sketching
+                case 7:  return (t / 7) % 2 == 0 ? Art.KnitA : Art.KnitB;           // knitting
+                case 8:  return (t / 90) % 4 == 0 ? Art.SitBlink : Art.Sit;
+                case 9:  return (t / 16) % 2 == 0 ? Art.HumA : Art.HumB;
+                case 10: return (t / 8) % 2 == 0 ? Art.WalkA : Art.WalkB;
+                case 11: return p.HopOff < 0 ? Art.ArmsUp : Art.Stand;              // puffed up / bouncing
+                case 12: return (ticks / 20) % 2 == 0 ? Art.HugA : Art.HugB;
+                case 13: return (t / 6) % 2 == 0 ? Art.DazedA : Art.DazedB;
+                case 14: return t % 80 < 55 ? Art.Salute : Art.Attention;
+                case 15: return Art.Doze;
+                case 16: return (t / 30) % 2 == 0 ? Art.SnugA : Art.SnugM;          // shy, blushing
+                case 17: return (t / 14) % 2 == 0 ? Art.SitEatA : Art.SitEatB;      // picnicking
+                case 18: return Art.FishCatch;                                     // holding up a fish: for you!
+                case 20: return (t / 9) % 2 == 0 ? Art.WaveA : Art.WaveB;           // waving down from the balcony
+                case 21: return (t / 45) % 2 == 0 ? Art.SitSleepA : Art.SitNod;
+            }
+            return Art.Stand;
+        }
+
+        // Two soft rivals happen to run into each other.
+        void SoftMeet(Penguin a, Penguin b)
+        {
+            var fam = IsFrost(a) ? b : a; var fb = fam == a ? b : a;
+            switch (fb.Name)
+            {
+                case "Bolt":                                                // race you!
+                    if (!StartRace(a, b)) Tease(a, b);
+                    Nudge(-1);
+                    return;
+                case "Mochi":                                               // "...have you got any snacks?" "no." *grr*
+                    Tease(a, b);
+                    Say(fam, BubbleArt.Grr, 45); Say(fb, BubbleArt.Fish, 45);
+                    return;
+                case "Doodle":                                              // he trips over his own feet; she pretends not to see
+                    fam.State = FACEPLANT; fam.Timer = 45; fam.Tick = 0; fam.HatAskew = true;
+                    Say(fam, BubbleArt.Bang, 40);
+                    fb.State = LOOK; fb.Timer = 60; fb.Tick = 0; fb.Dir = fam.X >= fb.X ? 1 : -1;
+                    Say(fb, rnd.Next(2) == 0 ? BubbleArt.Grr : BubbleArt.Heart, 45);
+                    Nudge(-1);
+                    return;
+                default:                                                    // Waddles and Juniper: lovely to see you
+                    HighFive(a, b);
+                    Say(b, BubbleArt.Heart, 45);
+                    Nudge(-2);
+                    return;
+            }
+        }
+
         // ---- family huddle
 
         void StartHuddle()
         {
             if (GroupBusy() || ticks < shooUntil) return;
-            var crew = PickGroup(12);
+            var crew = PickGroup(12, null, true);
             if (crew == null) return;
             var wa = WorkAreaAt(crew[0].X);
-            float c = Clamp(crew[0].X, wa.Left + 140, wa.Right - 140);
+            float c = Clamp(crew.Exists(IsFrost) ? MiddleSpot(140) : crew[0].X, wa.Left + 140, wa.Right - 140);
             var h = new Huddle { Order = PipInMiddle(crew), Center = c, Timer = 1100 };
             for (int i = 0; i < h.Order.Count; i++)
             {
@@ -5394,11 +6312,28 @@ namespace DesktopPenguins
         void StartPhoto()
         {
             if (GroupBusy() || ticks < shooUntil) return;
-            var crew = PickGroup(12);
+            var crew = PickGroup(12, null, true);
             if (crew == null) return;
             var wa = WorkAreaAt(crew[0].X);
-            float c = Clamp(crew[0].X, wa.Left + 220, wa.Right - 220);
+            float c = Clamp(crew.Exists(IsFrost) ? MiddleSpot(240) : crew[0].X, wa.Left + 220, wa.Right - 220);
             var ph = new Photo { Crew = crew, Timer = 450, PebbleNaps = rnd.Next(2) == 0 };
+            if (crew.Exists(IsFrost))
+            {   // both families: Pip and Pearl in the middle, the dads either side of them, everyone else on their own side
+                var fam = crew.FindAll(q => !IsFrost(q)); var fro = crew.FindAll(IsFrost);
+                foreach (var team in new[] { fam, fro })
+                {
+                    int side = team == fam ? -1 : 1;
+                    var kid = team.Find(q => q.Me.Small);
+                    var dad = team.Find(q => q.Name == "Ziggy" || q.Name == "Bubbles");
+                    var line = new List<Penguin>();
+                    if (kid != null) line.Add(kid);
+                    if (dad != null) line.Add(dad);
+                    foreach (var q in team) if (q != kid && q != dad) line.Add(q);
+                    for (int i = 0; i < line.Count; i++) SendTo(line[i], ph, c + side * (15 + i * 30), -side, PHOTO);
+                }
+                photo = ph;
+                return;
+            }
             var z = crew.Find(q => q.Me.Leader);
             var pip = crew.Find(q => q.Me.Small);
             var rest = crew.FindAll(q => q != z && q != pip);
@@ -5736,6 +6671,7 @@ namespace DesktopPenguins
         bool PersonalMoment()
         {
             if (inspect != null) return true;
+            if (meetings.Count > 0) return true;
             foreach (var p in penguins)
             {
                 if (!IsCore(p)) continue;
@@ -5745,10 +6681,10 @@ namespace DesktopPenguins
                     case PET: case HIFIVE: case TOGETHER: case NAPWITH: case STARE: case BLINK: case SULK: case TEASE: case MAKEUP:
                     case SHAKEHANDS: case CATCH: case HELP: case HOPUP: case AMBUSH: case JEALOUS: case GOGGLE: case HATFIX: case SLEEPWALK:
                     case PILLOW: case GRUMP: case SCARF: case VISIT: case REPAIR: case SHOWOFF: case CLAP:
-                    case CHECKPIP: case SNEAK: case STARTLE: case HOLD: case ICEFISH: case FISHWATCH:
+                    case CHECKPIP: case SNEAK: case STARTLE: case HOLD: case ICEFISH: case FISHWATCH: case MEET:
                         return true;
                     case RIDE: if (p.Timer < 100000) return true; break;               // a piggyback ride
-                    case GOTO: if (p.Job is Penguin) return true; break;              // on the way to a friend
+                    case GOTO: if (p.Job is Penguin || p.Job is Meeting) return true; break;   // on the way to a friend
                 }
             }
             return false;
@@ -6587,10 +7523,10 @@ namespace DesktopPenguins
 
         void StartHug(Penguin center, bool auto = false)
         {
-            if (IsFrost(center)) return;      // the family doesn't (yet) pile onto the neighbours
+            if (IsFrost(center) && !Friendly()) return;      // the family only piles onto the neighbours once they're friends
             foreach (var q in penguins)   // the jealous one is welcome too
                 if (q.Job == center && (q.State == JEALOUS || (q.State == GOTO && q.NextState == JEALOUS))) { q.Job = null; q.State = WALK; q.Tick = 0; }
-            var group = PickGroup(8, center);
+            var group = PickGroup(8, center, true);
             if (group == null) return;
             var h = new Hug { Center = center, Crew = group.GetRange(1, group.Count - 1) };
             h.Crew.Sort((a, b) => (Friends(b, center) ? 1 : 0).CompareTo(Friends(a, center) ? 1 : 0));   // friends cuddle closest
@@ -6904,6 +7840,7 @@ namespace DesktopPenguins
                         if (s.Progress >= 110) { s.Progress = 0; s.Stage++; }
                         if (s.Stage == 4)
                         {   // finished!  step back and admire it
+                            judgeAt = ticks + 220;
                             foreach (var p in s.Crew)
                                 if (p.Job == s) { p.Job = null; p.State = ADMIRE; p.Timer = 70; p.Tick = 0; Say(p, BubbleArt.Heart, 65); }
                             s.Life = 6000;   // about 3 minutes
@@ -6927,9 +7864,29 @@ namespace DesktopPenguins
             }
         }
 
-        void StartTug()
+        void StartTug(bool asked = false)
         {
             if (GroupBusy() || ticks < shooUntil) return;
+            List<Penguin> fam, fro;
+            if (CanVersus() && (asked || rnd.Next(4) != 0) && PickVersus(5, out fam, out fro))
+            {   // the family on the left end of the rope, the Frostbites on the right; the leaders glare across the middle
+                float vc = MiddleSpot(190);
+                var vt = new Tug { C = vc, C0 = vc, Timer = 900, Versus = true };
+                vt.Left.AddRange(fam); vt.Right.AddRange(fro);
+                foreach (var team in new[] { vt.Left, vt.Right })
+                {
+                    int side = team == vt.Left ? -1 : 1;
+                    for (int i = 0; i < team.Count; i++)
+                    {
+                        var p = team[i];
+                        p.TugOff = side * (34 + i * 29);
+                        SendTo(p, vt, vc + p.TugOff, -side, READY);
+                    }
+                }
+                Say(fam[0], BubbleArt.Grr, 50); Say(fro[0], BubbleArt.Grr, 50);
+                tug = vt;
+                return;
+            }
             var group = PickGroup(8);
             if (group == null) return;
             var wa = WorkAreaAt(group[0].X);
@@ -6969,6 +7926,7 @@ namespace DesktopPenguins
                 }
             }
             if (winners != null) QueueGoodGame(t.All());
+            if (winners != null && t.Versus) Nudge(-2);                         // a good game, all the same
             tug = null;
         }
 
@@ -7172,7 +8130,7 @@ namespace DesktopPenguins
         void SetHidden(bool hide)
         {
             hiddenFs = hide;
-            if (hide) { EndFight(null); EndTower(false); EndParty(); EndHug(); EndRace(null); ClearStrays(); EndGoodGame(); EndHuddle(); EndPhoto(); EndBedtime(false); EndDinner(); EndMovie(); movieCool = 0; EndInspect(); ClearFloaties(); }   // pause = game over
+            if (hide) { EndFight(null); EndTowers(); EndParty(); EndHug(); EndRace(null); ClearStrays(); EndGoodGame(); EndHuddle(); EndPhoto(); EndBedtime(false); EndDinner(); EndMovie(); movieCool = 0; EndInspect(); ClearFloaties(); }   // pause = game over
             int cmd = hide ? 0 /*SW_HIDE*/ : 4 /*SW_SHOWNOACTIVATE*/;
             foreach (var p in penguins)
             {
@@ -7215,6 +8173,7 @@ namespace DesktopPenguins
             }
             while (OwnCount() > target) RemovePenguin(penguins.FindLast(q => !IsFrost(q)));
             if (!frostOn) { var fb = penguins.Find(IsFrost); if (fb != null) RemovePenguin(fb); }
+            if (!frostOn) foreach (var m in meetings.ToArray()) EndMeeting(m);
 
             TrackSurfaces();
             SenseUser();
@@ -7233,6 +8192,7 @@ namespace DesktopPenguins
             UpdateStrays();
             UpdateGoodGame();
             UpdateHuddle();
+            UpdateMeetings();
             UpdatePhoto();
             UpdateBedtime();
             UpdateDinner();
@@ -7261,6 +8221,12 @@ namespace DesktopPenguins
                 if (ticks % 200 == 60 && rnd.Next(7) == 0) TryFishing();
             }
             if (ticks % 30 == 5) ScarfBack();
+            // the neighbours: get-togethers in the middle; the leaders keep the feud simmering
+            if (frostOn && !GroupBusy() && inspect == null && ticks >= shooUntil && ticks % 200 == 180
+                && meetings.Count < 2 && rnd.Next(3) == 0) TryMeeting();
+            if (frostOn && ticks % 1200 == 600 && feud < 55) Nudge(1);
+            if (judgeAt > 0 && ticks >= judgeAt) { judgeAt = 0; if (frostOn && !StartJudging() && snow != null && snow.Stage == 4 && !snow.Melting) judgeAt = ticks + 300; }   // busy: try again later
+            if (ticks % 900 == 450) { SaveFeud(); SaveRomance(); }
 
             // you've been away a while: huddle up; away longer: bedtime. Late at night: bedtime too.
             if (!GroupBusy() && ticks % 200 == 175 && idleMs > 60000 && idleMs < 300000 && rnd.Next(4) == 0) StartHuddle();
@@ -7392,6 +8358,8 @@ namespace DesktopPenguins
                 for (int k = 0; k < 3; k++)
                     using (var h = SnowArt.RenderHole(k))
                         g.DrawImage(h, outfitFrames.Length * cw + 320 + k * 110, oy + 40, SnowArt.HoleW * Z, SnowArt.HoleH * Z);
+                using (var bl = SnowArt.RenderBlanket())
+                    g.DrawImage(bl, outfitFrames.Length * cw + 40, oy + 120, SnowArt.BlanketW * Z, SnowArt.BlanketH * Z);
                 sheet.Save(path, ImageFormat.Png);
             }
         }
